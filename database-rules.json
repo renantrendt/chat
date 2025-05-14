@@ -1,0 +1,20 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "rooms": {
+      "$roomId": {
+        "messages": {
+          ".read": true,
+          ".write": true
+        }
+      }
+    },
+    "saved_conversations": {
+      "$userId": {
+        ".read": "auth == null || $userId === auth.uid",
+        ".write": "auth == null || $userId === auth.uid"
+      }
+    }
+  }
+}

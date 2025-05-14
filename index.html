@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messaging App</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Supabase Client Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    
+    <!-- Initialize Supabase -->
+    <script>
+        // Initialize Supabase client directly
+        const supabaseUrl = 'https://lsalesizrnvfwfhszwrz.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzYWxlc2l6cm52ZndmaHN6d3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxOTI1MjUsImV4cCI6MjA2Mjc2ODUyNX0.sgPlol4-f6irBui3bcrYULIb0ldZNHsd9dyG6uRMRU0';
+        
+        // Create the client as soon as the script loads
+        window.supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+        
+        // Log success
+        console.log('Supabase client initialized directly in HTML');
+    </script>
+</head>
+<body>
+    <div class="app-container">
+        <div id="connection-status" class="disconnected">Status: Connecting...</div>
+        <!-- Home Screen -->
+        <div id="home-screen" class="screen active">
+            <div class="logo">
+                <h1>Talk with your friends in school</h1>
+            </div>
+            <div class="username-container" id="username-container">
+                <h2>Enter your username</h2>
+                <input type="text" id="username-input" placeholder="Username">
+                <button id="save-username-btn">Save</button>
+            </div>
+            <div class="home-buttons" id="home-buttons" style="display: none;">
+                <h2>Welcome, <span id="user-display"></span>!</h2>
+                <button id="create-room-btn" class="btn create-btn">Create a Room</button>
+                <button id="join-room-btn" class="btn join-btn">Join a Room</button>
+            </div>
+        </div>
+
+        <!-- Join Room Screen -->
+        <div id="join-room-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" data-target="home-screen">Back</button>
+                <h2>Join a Room</h2>
+            </div>
+            <div class="join-form">
+                <input type="text" id="room-code-input" placeholder="Enter room code">
+                <button id="join-btn" class="btn join-btn">Join</button>
+            </div>
+        </div>
+
+        <!-- Create Room Screen -->
+        <div id="create-room-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" data-target="home-screen">Back</button>
+                <h2>Room Created</h2>
+            </div>
+            <div class="room-info">
+                <p>Share this code with others to join your room:</p>
+                <div class="room-code-display">
+                    <span id="room-code-display"></span>
+                    <button id="copy-code-btn">Copy</button>
+                </div>
+                <button id="enter-room-btn" class="btn create-btn">Enter Room</button>
+            </div>
+        </div>
+
+        <!-- Chat Room Screen -->
+        <div id="chat-room-screen" class="screen">
+            <div class="screen-header">
+                <button class="back-btn" data-target="home-screen">Leave Room</button>
+                <h2>Room: <span id="current-room-code"></span></h2>
+            </div>
+            <div class="chat-container">
+                <div id="messages-container" class="messages-container"></div>
+                <div class="message-input-container">
+                    <input type="text" id="message-input" placeholder="Type a message...">
+                    <button id="save-conversation-btn">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="supabase-config.js"></script>
+    <script src="app-supabase.js"></script>
+</body>
+</html>
