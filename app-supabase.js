@@ -439,8 +439,12 @@ function displayMessage(message) {
         messageElement.classList.add('received');
     }
     
-    // Create message content
+    // Format timestamp
+    const timestamp = formatMessageTime(message.timestamp);
+    
+    // Create message content with timestamp
     messageElement.innerHTML = `
+        <div class="timestamp">${timestamp}</div>
         <div class="sender">${message.sender}</div>
         <div class="content">${message.content}</div>
     `;
@@ -450,6 +454,19 @@ function displayMessage(message) {
     
     // Scroll to bottom
     scrollToBottom();
+}
+
+// Format timestamp for display
+function formatMessageTime(timestamp) {
+    if (!timestamp) return '';
+    
+    const date = new Date(timestamp);
+    
+    // Format time as HH:MM (24-hour format)
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    
+    return `${hours}:${minutes}`;
 }
 
 function scrollToBottom() {

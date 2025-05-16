@@ -51,6 +51,15 @@ body {
     text-align: center;
 }
 
+.header-btn {
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+}
+
 /* Home Screen */
 .logo {
     text-align: center;
@@ -238,6 +247,19 @@ body {
     background-color: #43b581;
 }
 
+.message .timestamp {
+    font-size: 12px;
+    margin-bottom: 3px;
+}
+
+.message.received .timestamp {
+    color: #a3a6aa;
+}
+
+.message.sent .timestamp {
+    color: #c9f0d8;
+}
+
 .message .sender {
     font-weight: 500;
     margin-bottom: 5px;
@@ -248,10 +270,16 @@ body {
     font-size: 16px;
 }
 
-.message-input-container {
+.bottom-container {
     display: flex;
+    flex-direction: column;
     padding: 15px 0;
     border-top: 1px solid #40444b;
+}
+
+.message-input-container {
+    display: flex;
+    width: 100%;
 }
 
 #message-input {
@@ -265,17 +293,26 @@ body {
 }
 
 #save-conversation-btn {
-    background-color: #43b581;
+    background-color: #7289da;
     color: white;
     border: none;
     border-radius: 5px;
-    padding: 0 15px;
-    margin-left: 10px;
+    padding: 8px 15px;
     cursor: pointer;
+    font-size: 14px;
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 1000;
+    display: none;
+}
+
+#chat-room-screen.active #save-conversation-btn {
+    display: block;
 }
 
 #save-conversation-btn:hover {
-    background-color: #3ca374;
+    background-color: #677bc4;
 }
 
 /* Connection Status Indicator */
