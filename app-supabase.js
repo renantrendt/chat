@@ -21,6 +21,7 @@ const currentRoomCode = document.getElementById('current-room-code');
 
 const messagesContainer = document.getElementById('messages-container');
 const messageInput = document.getElementById('message-input');
+const sendMessageBtn = document.getElementById('send-message-btn');
 const saveConversationBtn = document.getElementById('save-conversation-btn');
 const connectionStatus = document.getElementById('connection-status');
 
@@ -113,6 +114,15 @@ function addEventListeners() {
         if (e.key === 'Enter' && this.value.trim() !== '') {
             sendMessage(this.value.trim());
             this.value = '';
+        }
+    });
+    
+    // Send message button functionality
+    sendMessageBtn.addEventListener('click', function() {
+        if (messageInput.value.trim() !== '') {
+            sendMessage(messageInput.value.trim());
+            messageInput.value = '';
+            messageInput.focus();
         }
     });
     

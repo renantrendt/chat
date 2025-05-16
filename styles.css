@@ -285,11 +285,25 @@ body {
 #message-input {
     flex-grow: 1;
     padding: 12px;
-    border-radius: 5px;
+    border-radius: 5px 0 0 5px;
     border: none;
     background-color: #40444b;
     color: #ffffff;
     font-size: 16px;
+}
+
+#send-message-btn {
+    background-color: #43b581;
+    color: white;
+    border: none;
+    border-radius: 0 5px 5px 0;
+    padding: 0 15px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+#send-message-btn:hover {
+    background-color: #3ca374;
 }
 
 #save-conversation-btn {
