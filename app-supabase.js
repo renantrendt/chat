@@ -437,11 +437,23 @@ async function sendMessage(content) {
         // Insert into Supabase
         const { data, error } = await window.supabaseClient
             .from('messages')
-            .insert([message]);
+            .insert([message])
+            .select();
         
         if (error) throw error;
         
-        console.log('Message sent successfully');
+        console.log('Message sent successfully:', data);
+        
+        // Display the message immediately without waiting for subscription
+        if (data && data.length > 0) {
+            const newMessage = data[0];
+            // Check if this message is already in our messages array
+            if (!messages.some(m => m.id === newMessage.id)) {
+                messages.push(newMessage);
+                displayMessage(newMessage);
+                scrollToBottom();
+            }
+        }
         
         // Clear input
         messageInput.value = '';
