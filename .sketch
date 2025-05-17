@@ -1,0 +1,49 @@
+# Messaging Website Project Specification
+
+## Core Functionality
+
+### Home Page
+- When users first enter the website, they are presented with two options:
+  - "Create a Room" button (green)
+  - "Join a Room" button (blue)
+- On first visit, the websiste will ask you your username
+  - Initially stored in local storage
+  - Will be migrated to Supabase database in future versions
+
+### Room Creation
+- When a user clicks "Create a Room":
+  - A unique room code is generated
+  - This code can be shared with others to join the room
+
+### Joining Rooms
+- When a user clicks "Join a Room":
+  - They are prompted to enter a room code
+  - Upon entering a valid code, they join the corresponding room
+
+### Messaging Interface
+- Messages from other users appear with a white background
+- The current user's messages appear with a green background
+- Messages are sent by pressing Enter
+- All messages are saved in the local storage 
+  - Will be migrated to Supabase database in future versions
+
+### Conversation Management
+- Users can save conversations by clicking the "Save" button in the bottom left corner
+- Saved data includes:
+  - All messages in the room
+  - Information about which user sent each message
+  - The room code
+
+## Design Guidelines
+- Simple and smooth user interface
+- Modern UI design similar to Discord
+- Clean and intuitive layout
+- Color coding: green for create button, blue for join button
+
+## Future Enhancements
+- Supabase integration for storing:
+  - Conversations
+  - Room codes
+  - User information
+- User authentication system
+- User profile pictures

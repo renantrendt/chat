@@ -329,6 +329,79 @@ body {
     background-color: #677bc4;
 }
 
+/* Last Visited Section */
+.last-visited-section {
+    margin-top: 30px;
+    text-align: left;
+    border-top: 1px solid #40444b;
+    padding-top: 20px;
+}
+
+.last-visited-section h3 {
+    color: #ffffff;
+    margin-bottom: 15px;
+    font-size: 18px;
+}
+
+.last-visited-rooms {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.room-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #40444b;
+    padding: 12px 15px;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+.room-item:hover {
+    background-color: #4f545c;
+}
+
+.room-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.room-code {
+    font-weight: 500;
+    font-size: 16px;
+    color: #ffffff;
+}
+
+.room-visited {
+    font-size: 12px;
+    color: #a3a6aa;
+    margin-top: 3px;
+}
+
+.enter-room-btn {
+    background-color: #7289da;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.enter-room-btn:hover {
+    background-color: #677bc4;
+}
+
+.no-rooms-message {
+    color: #a3a6aa;
+    font-style: italic;
+    text-align: center;
+    padding: 15px 0;
+}
+
 /* Connection Status Indicator */
 #connection-status {
     position: fixed;

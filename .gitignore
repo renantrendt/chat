@@ -31,8 +31,3 @@ build/
 .tmp/
 .temp/
 .cache/
-
-# Error and debug files
-.error
-.better
-.sketch

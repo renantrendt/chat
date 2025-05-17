@@ -25,6 +25,11 @@ const sendMessageBtn = document.getElementById('send-message-btn');
 const saveConversationBtn = document.getElementById('save-conversation-btn');
 const connectionStatus = document.getElementById('connection-status');
 
+// Last visited rooms elements
+const lastVisitedSection = document.getElementById('last-visited-section');
+const lastVisitedRooms = document.getElementById('last-visited-rooms');
+const noRoomsMessage = document.getElementById('no-rooms-message');
+
 // App State
 let currentUser = null;
 let currentRoom = null;
@@ -47,6 +52,9 @@ async function initApp() {
         usernameContainer.style.display = 'none';
         homeButtons.style.display = 'block';
         userDisplay.textContent = currentUser;
+        
+        // Load last visited rooms for the current user
+        loadLastVisitedRooms();
     }
 
     // Check Supabase connection
@@ -140,6 +148,9 @@ function saveUsername() {
         usernameContainer.style.display = 'none';
         homeButtons.style.display = 'block';
         userDisplay.textContent = username;
+        
+        // Load last visited rooms for the new user
+        loadLastVisitedRooms();
     }
 }
 
@@ -249,6 +260,9 @@ async function enterRoom(roomCode) {
     
     // Save room to local storage
     saveRoom(roomCode);
+    
+    // Save to last visited rooms in Supabase
+    await saveLastVisitedRoom(roomCode);
     
     // Display room code in chat screen
     currentRoomCode.textContent = roomCode;
@@ -509,6 +523,155 @@ async function saveConversation() {
     setTimeout(() => {
         saveConversationBtn.textContent = originalText;
     }, 2000);
+}
+
+// Last Visited Rooms Functions
+async function saveLastVisitedRoom(roomCode) {
+    if (!currentUser || !roomCode) return;
+    
+    try {
+        // First check if this room already exists for the user
+        const { data: existingData, error: existingError } = await window.supabaseClient
+            .from('last_visited_rooms')
+            .select('id')
+            .eq('username', currentUser)
+            .eq('room_code', roomCode)
+            .single();
+        
+        if (existingError && existingError.code !== 'PGRST116') { // PGRST116 is the error code for 'no rows found'
+            console.error('Error checking existing room:', existingError);
+            return;
+        }
+        
+        if (existingData) {
+            // Room exists, update the timestamp
+            const { error: updateError } = await window.supabaseClient
+                .from('last_visited_rooms')
+                .update({ visited_at: new Date().toISOString() })
+                .eq('id', existingData.id);
+                
+            if (updateError) {
+                console.error('Error updating last visited room:', updateError);
+            }
+        } else {
+            // Room doesn't exist, insert new record
+            const { error: insertError } = await window.supabaseClient
+                .from('last_visited_rooms')
+                .insert([
+                    { 
+                        username: currentUser, 
+                        room_code: roomCode, 
+                        visited_at: new Date().toISOString() 
+                    }
+                ]);
+                
+            if (insertError) {
+                console.error('Error inserting last visited room:', insertError);
+            }
+        }
+        
+        // Reload the last visited rooms on the home screen
+        if (homeScreen.classList.contains('active')) {
+            loadLastVisitedRooms();
+        }
+        
+    } catch (error) {
+        console.error('Error saving last visited room:', error);
+    }
+}
+
+async function loadLastVisitedRooms() {
+    if (!currentUser) return;
+    
+    try {
+        // Get the 5 most recently visited rooms for the current user
+        const { data, error } = await window.supabaseClient
+            .from('last_visited_rooms')
+            .select('room_code, visited_at')
+            .eq('username', currentUser)
+            .order('visited_at', { ascending: false })
+            .limit(5);
+        
+        if (error) {
+            console.error('Error loading last visited rooms:', error);
+            return;
+        }
+        
+        // Clear the container
+        lastVisitedRooms.innerHTML = '';
+        
+        // Show or hide the no rooms message
+        if (!data || data.length === 0) {
+            noRoomsMessage.style.display = 'block';
+            return;
+        }
+        
+        // Hide the no rooms message
+        noRoomsMessage.style.display = 'none';
+        
+        // Display the rooms
+        data.forEach(room => {
+            // Create room item element
+            const roomItem = document.createElement('div');
+            roomItem.classList.add('room-item');
+            
+            // Format the visited time
+            const visitedTime = formatVisitedTime(room.visited_at);
+            
+            // Set the HTML content
+            roomItem.innerHTML = `
+                <div class="room-info">
+                    <div class="room-code">${room.room_code}</div>
+                    <div class="room-visited">Last visited: ${visitedTime}</div>
+                </div>
+                <button class="enter-room-btn" data-room-code="${room.room_code}">Enter</button>
+            `;
+            
+            // Add event listener to the enter button
+            const enterBtn = roomItem.querySelector('.enter-room-btn');
+            enterBtn.addEventListener('click', function() {
+                const roomCode = this.getAttribute('data-room-code');
+                enterRoom(roomCode);
+            });
+            
+            // Add to the container
+            lastVisitedRooms.appendChild(roomItem);
+        });
+        
+    } catch (error) {
+        console.error('Error loading last visited rooms:', error);
+    }
+}
+
+// Format the visited time for display
+function formatVisitedTime(timestamp) {
+    if (!timestamp) return 'Unknown';
+    
+    const visitedDate = new Date(timestamp);
+    const now = new Date();
+    
+    // Calculate the difference in milliseconds
+    const diffMs = now - visitedDate;
+    
+    // Convert to minutes, hours, days
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // Format based on the difference
+    if (diffMins < 1) {
+        return 'Just now';
+    } else if (diffMins < 60) {
+        return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
+    } else if (diffHours < 24) {
+        return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    } else if (diffDays < 7) {
+        return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+    } else {
+        // Format as date
+        const options = { month: 'short', day: 'numeric', year: 'numeric' };
+        return visitedDate.toLocaleDateString(undefined, options);
+    }
 }
 
 // Initialize the app when the DOM is loaded

@@ -1,0 +1,4 @@
+when i 1st create a room, my msg just actualy is send, after
+i've send it 3 times. But if I leave and re-enter the room
+all the 3 msg send before are there. it's probably some visual bug
+or something.
