@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check Realtime & Errors</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+    <h1>Supabase Realtime Check</h1>
+    <div id="status"></div>
+    <div id="errors" style="color: red;"></div>
+    <div id="messages"></div>
+    
+    <script>
+        // Initialize Supabase
+        const supabaseUrl = 'https://pmnfcpttqvxrjtohecpb.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtbmZjcHR0cXZ4cmp0b2hlY3BiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI5MzI5NzAsImV4cCI6MjA0ODUwODk3MH0.Ej0KU0z1HxVvPF0OLWsB7XVBR7hKZTn5UXBQ_7w6kKo';
+        const supabaseClient = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        
+        const statusDiv = document.getElementById('status');
+        const errorsDiv = document.getElementById('errors');
+        const messagesDiv = document.getElementById('messages');
+        
+        async function checkRealtime() {
+            statusDiv.innerHTML = '<p>Checking realtime connection...</p>';
+            
+            // Test 1: Check if we can connect to messages table
+            try {
+                const { data, error } = await supabaseClient
+                    .from('messages')
+                    .select('id, status, room_code')
+                    .limit(5);
+                    
+                if (error) {
+                    errorsDiv.innerHTML += `<p>Error fetching messages: ${JSON.stringify(error)}</p>`;
+                } else {
+                    messagesDiv.innerHTML = `<p>Found ${data.length} messages</p>`;
+                    data.forEach(msg => {
+                        messagesDiv.innerHTML += `<p>Message ${msg.id}: status = ${msg.status}</p>`;
+                    });
+                }
+            } catch (e) {
+                errorsDiv.innerHTML += `<p>Exception: ${e.message}</p>`;
+            }
+            
+            // Test 2: Try to subscribe to realtime
+            const channel = supabaseClient
+                .channel('test-channel')
+                .on('postgres_changes', 
+                    { 
+                        event: '*', 
+                        schema: 'public', 
+                        table: 'messages' 
+                    }, 
+                    (payload) => {
+                        statusDiv.innerHTML += `<p style="color: green;">Realtime event received: ${payload.eventType}</p>`;
+                        console.log('Realtime payload:', payload);
+                    }
+                )
+                .subscribe((status) => {
+                    statusDiv.innerHTML += `<p>Subscription status: ${status}</p>`;
+                    if (status === 'SUBSCRIBED') {
+                        statusDiv.innerHTML += '<p style="color: green;">✓ Realtime is working!</p>';
+                    }
+                });
+                
+            // Test 3: Check active_users function
+            try {
+                const { error } = await supabaseClient.rpc('update_user_activity', {
+                    p_username: 'test_user',
+                    p_room_code: 'TEST123'
+                });
+                
+                if (error) {
+                    errorsDiv.innerHTML += `<p>Error calling update_user_activity: ${JSON.stringify(error)}</p>`;
+                } else {
+                    statusDiv.innerHTML += '<p style="color: green;">✓ update_user_activity function works!</p>';
+                }
+            } catch (e) {
+                errorsDiv.innerHTML += `<p>Exception calling function: ${e.message}</p>`;
+            }
+        }
+        
+        checkRealtime();
+    </script>
+</body>
+</html> 

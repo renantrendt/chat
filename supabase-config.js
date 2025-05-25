@@ -1,12 +1,17 @@
 // Supabase Configuration
 // Using Supabase JS v2 client library
 
+// NOTE: Supabase is already initialized in index.html
+// This file is kept for reference and additional functions
+
+/*
 // Initialize Supabase client
 const supabaseUrl = 'https://lsalesizrnvfwfhszwrz.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzYWxlc2l6cm52ZndmaHN6d3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxOTI1MjUsImV4cCI6MjA2Mjc2ODUyNX0.sgPlol4-f6irBui3bcrYULIb0ldZNHsd9dyG6uRMRU0';
 
 // Create a global variable to hold the client
 let supabaseClient = null;
+*/
 
 // Function to initialize Supabase
 async function initSupabase() {
@@ -95,6 +100,6 @@ async function setupSupabaseTables() {
 }
 
 // Export functions and client
-window.supabaseClient = supabase;
+// window.supabaseClient = supabase; // Already set in index.html
 window.initSupabase = initSupabase;
 window.setupSupabaseTables = setupSupabaseTables;

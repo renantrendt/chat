@@ -42,12 +42,19 @@ const ROOMS_KEY = 'msg_rooms';
 const MESSAGES_KEY = 'msg_messages';
 const SAVED_CONVERSATIONS_KEY = 'msg_saved_conversations';
 
+// Make currentUser and currentRoom globally accessible for message-status.js
+window.currentUser = null;
+window.currentRoom = null;
+
 // Initialize App
 async function initApp() {
     // Check if username exists in local storage
     currentUser = localStorage.getItem(USERNAME_KEY);
     
     if (currentUser) {
+        // Set global variable for message-status.js
+        window.currentUser = currentUser;
+        
         // Show home buttons if username exists
         usernameContainer.style.display = 'none';
         homeButtons.style.display = 'block';
@@ -55,6 +62,11 @@ async function initApp() {
         
         // Load last visited rooms for the current user
         loadLastVisitedRooms();
+    }
+    
+    // Initialize unread notifications
+    if (window.initUnreadNotifications) {
+        window.initUnreadNotifications();
     }
 
     // Check Supabase connection
@@ -142,15 +154,21 @@ function saveUsername() {
     const username = usernameInput.value.trim();
     
     if (username) {
-        currentUser = username;
+        // Save to local storage
         localStorage.setItem(USERNAME_KEY, username);
         
-        usernameContainer.style.display = 'none';
-        homeButtons.style.display = 'block';
+        // Set current user
+        currentUser = username;
+        window.currentUser = username; // Also set globally
+        
+        // Display username
         userDisplay.textContent = username;
         
-        // Load last visited rooms for the new user
-        loadLastVisitedRooms();
+        // Show home screen
+        showScreen(homeScreen, () => {
+            // Load last visited rooms after showing home screen
+            loadLastVisitedRooms();
+        });
     }
 }
 
@@ -257,6 +275,7 @@ async function enterRoom(roomCode) {
     
     // Set current room
     currentRoom = roomCode;
+    window.currentRoom = roomCode; // Also set globally
     
     // Save room to local storage
     saveRoom(roomCode);
@@ -275,12 +294,47 @@ async function enterRoom(roomCode) {
     // Load messages for this room
     await loadMessages(roomCode);
     
+    // Clear unread count for this room
+    if (window.clearUnreadForRoom) {
+        window.clearUnreadForRoom(roomCode);
+    }
+    
+    // Subscribe to unread messages for this room
+    if (window.subscribeToUnreadMessages) {
+        window.subscribeToUnreadMessages(roomCode);
+    }
+    
+    // Start activity tracking for message status
+    if (window.startActivityTracking) {
+        window.startActivityTracking();
+    }
+    
+    // Subscribe to message status updates
+    if (window.subscribeToMessageStatus) {
+        window.subscribeToMessageStatus();
+    }
+    
+    // Setup message visibility observer for read receipts
+    if (window.setupMessageVisibilityObserver) {
+        window.setupMessageVisibilityObserver();
+    }
+    
     // Focus on message input
     messageInput.focus();
 }
 
 function leaveRoom() {
     console.log('Leaving room:', currentRoom);
+    
+    // Clean up unread notifications
+    if (window.cleanupUnreadNotifications) {
+        window.cleanupUnreadNotifications();
+    }
+    
+    // Clean up message status tracking
+    if (window.cleanupMessageStatus) {
+        window.cleanupMessageStatus();
+    }
     
     // Unsubscribe from real-time updates
     if (messageSubscription) {
@@ -290,6 +344,7 @@ function leaveRoom() {
     
     // Reset room state
     currentRoom = null;
+    window.currentRoom = null; // Also reset globally
     messages = [];
     messagesContainer.innerHTML = '';
 }
@@ -630,10 +685,14 @@ async function loadLastVisitedRooms() {
             // Format the visited time
             const visitedTime = formatVisitedTime(room.visited_at);
             
+            // Get unread count for this room
+            const unreadCount = window.getUnreadCount ? window.getUnreadCount(room.room_code) : 0;
+            const unreadBadge = unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : '';
+            
             // Set the HTML content
             roomItem.innerHTML = `
                 <div class="room-info">
-                    <div class="room-code">${room.room_code}</div>
+                    <div class="room-code">${room.room_code} ${unreadBadge}</div>
                     <div class="room-visited">Last visited: ${visitedTime}</div>
                 </div>
                 <button class="enter-room-btn" data-room-code="${room.room_code}">Enter</button>
@@ -648,6 +707,11 @@ async function loadLastVisitedRooms() {
             
             // Add to the container
             lastVisitedRooms.appendChild(roomItem);
+            
+            // Subscribe to unread messages for this room (to track while on home screen)
+            if (window.subscribeToUnreadMessages) {
+                window.subscribeToUnreadMessages(room.room_code);
+            }
         });
         
     } catch (error) {

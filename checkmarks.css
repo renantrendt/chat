@@ -1,0 +1,57 @@
+/* Check Mark Styles */
+/* 
+ * PHASE 1 IMPLEMENTATION - UI Cleanup
+ * Date: [Current Date]
+ * All checkmark styles have been commented out to create a cleaner UI
+ * while maintaining the backend message status functionality.
+ * To restore checkmarks, simply uncomment the styles below.
+ */
+
+/*
+.message-status {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    height: 16px;
+}
+*/
+
+/* Single check - sent */
+/*
+.check-sent {
+    width: 16px;
+    height: 16px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%23999'%3E%3Cpath d='M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+}
+*/
+
+/* Double check - delivered */
+/*
+.check-delivered {
+    width: 20px;
+    height: 16px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='16' fill='%23999'%3E%3Cpath d='M7 9L4 6l1-1 2 2 5-5 1 1L7 9z'/%3E%3Cpath d='M14 9l-3-3 1-1 2 2 5-5 1 1L14 9z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+}
+*/
+
+/* Double check - read (blue) */
+/*
+.check-read {
+    width: 20px;
+    height: 16px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='16' fill='%231E88E5'%3E%3Cpath d='M7 9L4 6l1-1 2 2 5-5 1 1L7 9z'/%3E%3Cpath d='M14 9l-3-3 1-1 2 2 5-5 1 1L14 9z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+}
+*/
+
+/* Only show status for sent messages (not received) */
+/*
+.message.received .message-status {
+    display: none;
+}
+*/ 
