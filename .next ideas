@@ -1,4 +1,28 @@
 # Messaging App - Feature Ideas & Improvements
+## For now ->
+When someone enters a room,a green text
+will apear saying "[user] joined the room", this is based on the feature we made of the "left the rooom" so this should be easy to make.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## DONE ->
+
+Make so that when someone like closes the webstie's tab or when the person leaves a room that has other people on it, those other people will recive a msg in the top of the screen that will last for 8seconds saying "user_name left the room.. The msg will appear right below the code:_____ of the room with a red color.
+I feel like this isn't so comples
 
 ## 1. Message Status Indicators (Checkmarks)
 

@@ -320,12 +320,22 @@ async function enterRoom(roomCode) {
         window.setupMessageVisibilityObserver();
     }
     
+    // Initialize room presence tracking
+    if (window.initRoomPresence) {
+        window.initRoomPresence(roomCode, currentUser);
+    }
+    
     // Focus on message input
     messageInput.focus();
 }
 
 function leaveRoom() {
     console.log('Leaving room:', currentRoom);
+    
+    // Clean up room presence
+    if (window.cleanupRoomPresence) {
+        window.cleanupRoomPresence();
+    }
     
     // Clean up unread notifications
     if (window.cleanupUnreadNotifications) {

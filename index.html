@@ -90,6 +90,10 @@
                 <button class="back-btn" data-target="home-screen">Leave Room</button>
                 <h2>Room: <span id="current-room-code"></span></h2>
             </div>
+            <!-- User Leave Notification -->
+            <div id="user-leave-notification" class="user-leave-notification"></div>
+            <!-- User Join Notification -->
+            <div id="user-join-notification" class="user-join-notification"></div>
             <div class="chat-container">
                 <div id="messages-container" class="messages-container"></div>
                 <div class="message-input-container">
@@ -102,6 +106,7 @@
 
     <script src="supabase-config.js"></script>
     <script src="app-supabase.js"></script>
+    <script src="room-presence.js"></script>
     <script src="message-status.js"></script>
     <script src="message-status-integration.js"></script>
     <script src="message-status-polling.js"></script>

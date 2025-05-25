@@ -468,3 +468,48 @@ body {
     background-color: #faa61a;
     color: white;
 }
+
+/* User Leave Notification */
+.user-leave-notification {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #ff4444;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1000;
+}
+
+.user-leave-notification.show {
+    opacity: 1;
+}
+
+.user-join-notification {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: #4CAF50;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1000;
+}
+
+.user-join-notification.show {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .user-leave-notification {
+        top: 100px;
+        font-size: 13px;
+        padding: 10px 20px;
+    }
+}

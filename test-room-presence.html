@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Room Presence</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .log {
+            background: #f5f5f5;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #dc3545;
+            color: white;
+            padding: 15px 30px;
+            border-radius: 8px;
+            display: none;
+        }
+        .notification.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>Room Presence Test</h1>
+    
+    <div class="notification" id="notification"></div>
+    
+    <div class="test-section">
+        <h2>Test Setup</h2>
+        <p>Open this page in two different browser windows/tabs with different usernames to test presence.</p>
+        
+        <div>
+            <label>Username: </label>
+            <input type="text" id="username" placeholder="Enter username">
+        </div>
+        
+        <div>
+            <label>Room Code: </label>
+            <input type="text" id="roomCode" placeholder="Enter room code" value="TEST123">
+        </div>
+        
+        <button onclick="joinRoom()">Join Room</button>
+        <button onclick="leaveRoom()">Leave Room</button>
+        
+        <div class="log" id="log"></div>
+    </div>
+    
+    <script>
+        // Initialize Supabase
+        const supabaseUrl = 'https://lsalesizrnvfwfhszwrz.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxzYWxlc2l6cm52ZndmaHN6d3J6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxOTI1MjUsImV4cCI6MjA2Mjc2ODUyNX0.sgPlol4-f6irBui3bcrYULIb0ldZNHsd9dyG6uRMRU0';
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        
+        let presenceChannel = null;
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div>[${time}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 8000);
+        }
+        
+        async function joinRoom() {
+            const username = document.getElementById('username').value;
+            const roomCode = document.getElementById('roomCode').value;
+            
+            if (!username || !roomCode) {
+                alert('Please enter username and room code');
+                return;
+            }
+            
+            // Clean up existing channel
+            if (presenceChannel) {
+                await presenceChannel.untrack();
+                presenceChannel.unsubscribe();
+            }
+            
+            // Create presence channel
+            const channelName = `presence:${roomCode}`;
+            presenceChannel = supabase.channel(channelName, {
+                config: {
+                    presence: {
+                        key: username
+                    }
+                }
+            });
+            
+            // Subscribe to presence events
+            presenceChannel
+                .on('presence', { event: 'sync' }, () => {
+                    const state = presenceChannel.presenceState();
+                    log(`Presence sync - Users in room: ${Object.keys(state).join(', ')}`);
+                })
+                .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+                    log(`User joined: ${key}`);
+                })
+                .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+                    log(`User left: ${key}`);
+                    showNotification(`${key} left the room`);
+                })
+                .subscribe(async (status) => {
+                    log(`Subscription status: ${status}`);
+                    if (status === 'SUBSCRIBED') {
+                        // Track user presence
+                        const presenceTrack = await presenceChannel.track({
+                            user: username,
+                            online_at: new Date().toISOString()
+                        });
+                        log('Joined room successfully');
+                    }
+                });
+        }
+        
+        async function leaveRoom() {
+            if (presenceChannel) {
+                await presenceChannel.untrack();
+                presenceChannel.unsubscribe();
+                presenceChannel = null;
+                log('Left room');
+            }
+        }
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', async () => {
+            if (presenceChannel) {
+                await presenceChannel.untrack();
+            }
+        });
+    </script>
+</body>
+</html> 
