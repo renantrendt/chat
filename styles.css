@@ -335,6 +335,9 @@ body {
     text-align: left;
     border-top: 1px solid #40444b;
     padding-top: 20px;
+    max-height: 400px;
+    display: flex;
+    flex-direction: column;
 }
 
 .last-visited-section h3 {
@@ -347,26 +350,53 @@ body {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overflow-y: auto;
+    max-height: 350px;
+    padding-right: 10px;
+}
+
+/* Custom scrollbar for last visited rooms */
+.last-visited-rooms::-webkit-scrollbar {
+    width: 8px;
+}
+
+.last-visited-rooms::-webkit-scrollbar-track {
+    background: #2f3136;
+    border-radius: 4px;
+}
+
+.last-visited-rooms::-webkit-scrollbar-thumb {
+    background: #40444b;
+    border-radius: 4px;
+}
+
+.last-visited-rooms::-webkit-scrollbar-thumb:hover {
+    background: #4f545c;
 }
 
 .room-item {
-    background-color: #f0f0f0;
-    border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 10px;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background-color: #40444b;
+    padding: 12px 15px;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+.room-item:hover {
+    background-color: #4f545c;
 }
 
 .room-info {
-    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .room-code {
-    font-weight: bold;
-    font-size: 18px;
-    color: #333;
+    font-weight: 500;
+    font-size: 16px;
+    color: #ffffff;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -385,9 +415,9 @@ body {
 }
 
 .room-visited {
-    font-size: 14px;
-    color: #666;
-    margin-top: 5px;
+    font-size: 12px;
+    color: #a3a6aa;
+    margin-top: 3px;
 }
 
 .enter-room-btn {

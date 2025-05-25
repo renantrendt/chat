@@ -164,11 +164,12 @@ function saveUsername() {
         // Display username
         userDisplay.textContent = username;
         
-        // Show home screen
-        showScreen(homeScreen, () => {
-            // Load last visited rooms after showing home screen
-            loadLastVisitedRooms();
-        });
+        // Hide username container and show home buttons
+        usernameContainer.style.display = 'none';
+        homeButtons.style.display = 'block';
+        
+        // Load last visited rooms
+        loadLastVisitedRooms();
     }
 }
 
@@ -651,13 +652,13 @@ async function loadLastVisitedRooms() {
     if (!currentUser) return;
     
     try {
-        // Get the 5 most recently visited rooms for the current user
+        // Get the 10 most recently visited rooms for the current user
         const { data, error } = await window.supabaseClient
             .from('last_visited_rooms')
             .select('room_code, visited_at')
             .eq('username', currentUser)
             .order('visited_at', { ascending: false })
-            .limit(5);
+            .limit(10);
         
         if (error) {
             console.error('Error loading last visited rooms:', error);
