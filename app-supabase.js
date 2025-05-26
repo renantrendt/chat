@@ -60,6 +60,12 @@ async function initApp() {
         homeButtons.style.display = 'block';
         userDisplay.textContent = currentUser;
         
+        // Apply profile color to username display
+        const profile = window.getUserProfile ? window.getUserProfile(currentUser) : null;
+        if (profile && profile.color) {
+            userDisplay.style.color = profile.color;
+        }
+        
         // Load last visited rooms for the current user
         loadLastVisitedRooms();
     }
@@ -67,6 +73,11 @@ async function initApp() {
     // Initialize unread notifications
     if (window.initUnreadNotifications) {
         window.initUnreadNotifications();
+    }
+    
+    // Initialize profile
+    if (window.initProfile) {
+        window.initProfile();
     }
 
     // Check Supabase connection
@@ -163,6 +174,12 @@ function saveUsername() {
         
         // Display username
         userDisplay.textContent = username;
+        
+        // Apply profile color to username display
+        const profile = window.getUserProfile ? window.getUserProfile(username) : null;
+        if (profile && profile.color) {
+            userDisplay.style.color = profile.color;
+        }
         
         // Hide username container and show home buttons
         usernameContainer.style.display = 'none';
@@ -541,13 +558,27 @@ function displayMessage(message) {
         messageElement.classList.add('received');
     }
     
+    // Get user profile
+    const profile = window.getUserProfile ? window.getUserProfile(message.sender) : { color: '#ffffff' };
+    
     // Format timestamp
     const timestamp = formatMessageTime(message.timestamp);
     
+    // Create message header with profile image
+    let profileImageHtml = '';
+    if (profile.image) {
+        profileImageHtml = `<img src="${profile.image}" alt="${message.sender}" class="message-profile-img">`;
+    }
+    
     // Create message content with timestamp
     messageElement.innerHTML = `
-        <div class="timestamp">${timestamp}</div>
-        <div class="sender">${message.sender}</div>
+        <div class="message-header">
+            ${profileImageHtml}
+            <div class="message-info">
+                <div class="timestamp">${timestamp}</div>
+                <div class="sender" style="color: ${profile.color}">${message.sender}</div>
+            </div>
+        </div>
         <div class="content">${message.content}</div>
     `;
     

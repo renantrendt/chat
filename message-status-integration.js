@@ -19,13 +19,27 @@ window.displayMessage = function(message) {
         messageElement.classList.add('received');
     }
     
+    // Get user profile
+    const profile = window.getUserProfile ? window.getUserProfile(message.sender) : { color: '#ffffff' };
+    
     // Format timestamp
     const timestamp = formatMessageTime(message.timestamp);
     
+    // Create message header with profile image
+    let profileImageHtml = '';
+    if (profile.image) {
+        profileImageHtml = `<img src="${profile.image}" alt="${message.sender}" class="message-profile-img">`;
+    }
+    
     // Create message content with timestamp
     messageElement.innerHTML = `
-        <div class="timestamp">${timestamp}</div>
-        <div class="sender">${message.sender}</div>
+        <div class="message-header">
+            ${profileImageHtml}
+            <div class="message-info">
+                <div class="timestamp">${timestamp}</div>
+                <div class="sender" style="color: ${profile.color}">${message.sender}</div>
+            </div>
+        </div>
         <div class="content">${message.content}</div>
     `;
     

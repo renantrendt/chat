@@ -5,20 +5,10 @@ will be able to drop his image/picture, it will be in a ciruclar
 moldure, the moldure will appear above the persons name in the 
 rooms.
 And also in the profile page, some colors so that you can choose to 
-put as your color of the name 
+put as your color of the name.
 
 
 
 
 ## For later ->
-Add in the left side of room (in the side where the "Save Chat" is), a 
-UI with every one that already entered this specific room, and a "Online" if
-the person is online, and the color is green, and if a "Off" if the person
-is offline. I Suppose it is not so hard. The sidebar should NOT be overlaping
-the chat part of the screen DO NOT CHANGE THE SIZES OF ANYTHING ONLY THE
-SIDE BAR OF THE ONLINE/OFFLINE!  anyone who have left the room still will
-have their name in the side bar, but with a offline red text instead of 
-online green, only if someone has left within a 45minutes gap and not came
-back then the name goes away
----
 VIP
