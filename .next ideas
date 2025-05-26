@@ -1,157 +1,24 @@
-# Messaging App - Feature Ideas & Improvements
 ## For now ->
-When someone enters a room,a green text
-will apear saying "[user] joined the room", this is based on the feature we made of the "left the rooom" so this should be easy to make.
+Adding a Profile page, at the home screen, it will be in the
+right top of the scren. It will have a "Image" that the user
+will be able to drop his image/picture, it will be in a ciruclar 
+moldure, the moldure will appear above the persons name in the 
+rooms.
+And also in the profile page, some colors so that you can choose to 
+put as your color of the name 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-## DONE ->
-
-Make so that when someone like closes the webstie's tab or when the person leaves a room that has other people on it, those other people will recive a msg in the top of the screen that will last for 8seconds saying "user_name left the room.. The msg will appear right below the code:_____ of the room with a red color.
-I feel like this isn't so comples
-
-## 1. Message Status Indicators (Checkmarks)
-
-### Current Issue
-The CSS for single, double, and blue checkmarks creates visual clutter.
-
-### Proposed Solution
-- **Remove** all CSS styling for message status checkmarks (single check, double check, blue check)
-- **Keep** the underlying functionality that tracks whether users are active on the website
-- This makes Bernardo's life a whole lot easier
-
-## 2. Database Schema Improvements (Supabase)
-
-### A. Active Users Table - Fix Required
-**Problem:** The `active_users` table currently shows all users as active, regardless of their actual status.
-
-**Solution:** Implement proper real-time status tracking.
-
-### B. Messages Table - Restructuring
-**Current Issues:**
-- The `messages` table has unnecessary columns: `seen`, `seen_at`, and `recipient`
-- This creates redundancy and poor data organization
-
-**Proposed Changes:**
-1. **Remove** the following columns from `messages` table:
-   - `seen`
-   - `seen_at`
-   - `recipient`
-
-2. **Create** a new `seen` table with the following structure:
-   - `id` (foreign key) - Links to the user who saw the message
-   - `message_id` (foreign key) - Links to the specific message
-   - `seen` (boolean) - Indicates if the message was seen
-   - `seen_at` (timestamp) - Records when the message was seen
-
-### C. Users Table - Enhancement
-**Current Issue:** The `users` table is empty and not being utilized.
-
-**Proposed Structure:**
-- `user_id` (primary key) - Unique identifier for each user
-- `is_online` (boolean) - Real-time online/offline status
-- `last_active` (timestamp) - Last activity timestamp
-
-**Benefits:**
-- Other tables can reference user information efficiently
-- Centralized user status management
-- Better data integrity across the application
-
-## 3. Unread Message Notification in Browser Tab
-
-### Feature Description
-Display unread message count in the browser tab title when users have new messages.
-
-### Implementation Details
-- **Format:** `() Messaging App` where the () will have the number of unread messages
-- **Example:** `(8) Messaging App` indicates 8 unread messages
-
-### Behavior Rules
-1. **Count Logic:** Only count unread messages from the currently active room/conversation
-2. **Clear Condition:** Removes the unread count when the user goes back in the room/tab
-3. **Assumption:** Entering a room means all messages in that room are considered "seen"
-
-### Technical Requirements
-- Real-time updates using WebSocket or polling
-- Store unread counts per room in local state or database
-- Update document.title dynamically based on unread count
-
-## 4. Implementation Checklist
-
-### Phase 1: UI Cleanup
-- [x] Identify all CSS classes for message checkmarks (single, double, blue)
-- [x] Remove or comment out checkmark CSS styles
-- [x] Test that message status tracking still works in the backend
-- [x] Verify UI looks cleaner without checkmarks
-
-### Phase 2: Database Restructuring
-
-#### Messages Table
-- [SKIPPED] Backup current messages table
-- [SKIPPED] Remove `seen` column from messages table
-- [SKIPPED] Remove `seen_at` column from messages table
-- [SKIPPED] Remove `recipient` column from messages table
-- [SKIPPED] Update any queries that reference these columns
-
-#### Create Seen Table
-- [SKIPPED] Create new `seen` table schema
-- [SKIPPED] Add `id` column (foreign key to users)
-- [SKIPPED] Add `message_id` column (foreign key to messages)
-- [SKIPPED] Add `seen` boolean column
-- [SKIPPED] Add `seen_at` timestamp column
-- [SKIPPED] Create necessary indexes for performance
-- [SKIPPED] Migrate existing seen data to new table
-
-#### Users Table
-- [x] Add `user_id` as primary key
-- [x] Add `is_online` boolean column
-- [x] Add `last_active` timestamp column
-- [x] Populate table with existing user data
-- [x] Create indexes on frequently queried columns
-
-#### Active Users Fix
-- [x] Debug why all users show as active
-- [x] Implement proper online/offline detection
-- [x] Add WebSocket or polling for real-time status
-- [x] Test status updates work correctly
-
-### Phase 3: Unread Message Notifications
-- [x] Create function to count unread messages per room
-- [x] Implement state management for unread counts
-- [x] Add event listener for new messages
-- [x] Create function to update browser tab title
-- [x] Add logic to clear count when entering a room
-- [x] Test notification appears correctly
-- [x] Test notification clears when entering room
-- [x] Ensure count only shows for active room
-
-### Phase 4: Testing & Optimization
-- [ ] Test all database migrations
-- [ ] Verify no broken queries after schema changes
-- [ ] Test real-time user status updates
-- [ ] Test unread message counts accuracy
-- [ ] Performance test with multiple users
-- [ ] Fix any edge cases or bugs
-- [ ] Document all changes made
-
-### Phase 5: Deployment
-- [ ] Create database migration scripts
-- [ ] Plan deployment with minimal downtime
-- [ ] Deploy database changes
-- [ ] Deploy frontend changes
-- [ ] Monitor for any issues
-- [ ] Rollback plan ready if needed
+## For later ->
+Add in the left side of room (in the side where the "Save Chat" is), a 
+UI with every one that already entered this specific room, and a "Online" if
+the person is online, and the color is green, and if a "Off" if the person
+is offline. I Suppose it is not so hard. The sidebar should NOT be overlaping
+the chat part of the screen DO NOT CHANGE THE SIZES OF ANYTHING ONLY THE
+SIDE BAR OF THE ONLINE/OFFLINE!  anyone who have left the room still will
+have their name in the side bar, but with a offline red text instead of 
+online green, only if someone has left within a 45minutes gap and not came
+back then the name goes away
+---
+VIP

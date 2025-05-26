@@ -1,0 +1,13 @@
+## User Presence Sidebar Feature
+
+### Requirements:
+- [ ] Add sidebar on the left side of room (same side as "Save Chat" button)
+- [ ] Display UI with everyone who has entered this specific room
+- [ ] Show "Online" status with green color for users currently in room
+- [ ] Show "Off" status with red color for users who left
+- [ ] Sidebar must NOT overlap the chat part of the screen
+- [ ] DO NOT CHANGE THE SIZES OF ANYTHING except the sidebar
+- [ ] Keep users who left in the sidebar with offline status
+- [ ] If user comeback to the room, change back to Online
+- [ ] Remove users from sidebar after 45 minutes if they don't return
+- [ ] Add hide/show toggle functionality
