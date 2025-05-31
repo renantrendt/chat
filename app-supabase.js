@@ -55,15 +55,35 @@ async function initApp() {
         // Set global variable for message-status.js
         window.currentUser = currentUser;
         
+        // Insert username into user_name table if not exists
+        try {
+            const { data, error } = await window.supabaseClient
+                .from('user_name')
+                .insert([{ username: currentUser }])
+                .select();
+            
+            if (error && error.code !== '23505') { // 23505 is unique violation (username already exists)
+                console.error('Error inserting username:', error);
+            }
+        } catch (err) {
+            console.error('Failed to save username to database:', err);
+        }
+        
         // Show home buttons if username exists
         usernameContainer.style.display = 'none';
         homeButtons.style.display = 'block';
         userDisplay.textContent = currentUser;
         
         // Apply profile color to username display
-        const profile = window.getUserProfile ? window.getUserProfile(currentUser) : null;
+        const profile = await window.getUserProfile(currentUser);
         if (profile && profile.color) {
             userDisplay.style.color = profile.color;
+        }
+        
+        // Re-initialize VIP background features now that we have a username
+        if (window.initVIPBackground) {
+            console.log('Re-initializing VIP background after username load...');
+            await window.initVIPBackground();
         }
         
         // Load last visited rooms for the current user
@@ -77,9 +97,9 @@ async function initApp() {
     
     // Initialize profile
     if (window.initProfile) {
-        window.initProfile();
+        await window.initProfile();
     }
-
+    
     // Check Supabase connection
     try {
         // Test connection with the already initialized client
@@ -161,7 +181,7 @@ function addEventListeners() {
 }
 
 // Username Functions
-function saveUsername() {
+async function saveUsername() {
     const username = usernameInput.value.trim();
     
     if (username) {
@@ -172,13 +192,35 @@ function saveUsername() {
         currentUser = username;
         window.currentUser = username; // Also set globally
         
+        // Insert username into user_name table in Supabase
+        try {
+            const { data, error } = await window.supabaseClient
+                .from('user_name')
+                .insert([{ username: username }])
+                .select();
+            
+            if (error && error.code !== '23505') { // 23505 is unique violation (username already exists)
+                console.error('Error inserting username:', error);
+            } else {
+                console.log('Username saved to database:', username);
+            }
+        } catch (err) {
+            console.error('Failed to save username to database:', err);
+        }
+        
         // Display username
         userDisplay.textContent = username;
         
         // Apply profile color to username display
-        const profile = window.getUserProfile ? window.getUserProfile(username) : null;
+        const profile = await window.getUserProfile(username);
         if (profile && profile.color) {
             userDisplay.style.color = profile.color;
+        }
+        
+        // Initialize VIP background features now that we have a username
+        if (window.initVIPBackground) {
+            console.log('Initializing VIP background after username save...');
+            await window.initVIPBackground();
         }
         
         // Hide username container and show home buttons
@@ -547,7 +589,7 @@ async function sendMessage(content) {
     }
 }
 
-function displayMessage(message) {
+async function displayMessage(message) {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message');
     
@@ -559,7 +601,7 @@ function displayMessage(message) {
     }
     
     // Get user profile
-    const profile = window.getUserProfile ? window.getUserProfile(message.sender) : { color: '#ffffff' };
+    const profile = await window.getUserProfile(message.sender);
     
     // Format timestamp
     const timestamp = formatMessageTime(message.timestamp);
@@ -570,13 +612,16 @@ function displayMessage(message) {
         profileImageHtml = `<img src="${profile.image}" alt="${message.sender}" class="message-profile-img">`;
     }
     
+    // Add VIP class if user is VIP
+    const vipClass = profile.isVIP ? 'vip-user' : '';
+    
     // Create message content with timestamp
     messageElement.innerHTML = `
         <div class="message-header">
             ${profileImageHtml}
             <div class="message-info">
                 <div class="timestamp">${timestamp}</div>
-                <div class="sender" style="color: ${profile.color}">${message.sender}</div>
+                <div class="sender ${vipClass}" style="color: ${profile.color}">${message.sender}</div>
             </div>
         </div>
         <div class="content">${message.content}</div>

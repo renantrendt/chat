@@ -1,13 +1,22 @@
-## User Presence Sidebar Feature
+### Idea:
+[Do 2nd, second and do 1st first]
+So a little above in the right corner of all msgs, there will be a 
+little arrow going down, when you press it, it will show the following options => Reply, and React:
 
-### Requirements:
-- [ ] Add sidebar on the left side of room (same side as "Save Chat" button)
-- [ ] Display UI with everyone who has entered this specific room
-- [ ] Show "Online" status with green color for users currently in room
-- [ ] Show "Off" status with red color for users who left
-- [ ] Sidebar must NOT overlap the chat part of the screen
-- [ ] DO NOT CHANGE THE SIZES OF ANYTHING except the sidebar
-- [ ] Keep users who left in the sidebar with offline status
-- [ ] If user comeback to the room, change back to Online
-- [ ] Remove users from sidebar after 45 minutes if they don't return
-- [ ] Add hide/show toggle functionality
+2nd
+Reply == the next msg I send will have a little box above it, with 
+the msg from the other person. (e.g. B send a msg saying "Hi how are you? C send a msg using the reply feature saying "I'm good thanks". C can't reply to him self.). The little box will appeaer above the msg person e.g. C send with the and inside the box will have the msg that e.g. person B send. [You can reply to your self]
+
+1st
+React == When you click react, a list with most used emojis (Heart, Like, Happy face, and Laugh. ❤️👍😁🤣😂). and then after all of those emojis a + sing will be on it's right side, when you click you get acess to all the emojis. When you  click in any of the emojis the emoji will appear below the msg that you reacted,  
+
+### Exclarification:
+
+
+
+### Implementation:
+
+
+
+
+### Check-list:

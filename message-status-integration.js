@@ -2,7 +2,7 @@
 
 // Override the original displayMessage function to add status tracking
 const originalDisplayMessage = window.displayMessage || function() {};
-window.displayMessage = function(message) {
+window.displayMessage = async function(message) {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message');
     
@@ -20,7 +20,7 @@ window.displayMessage = function(message) {
     }
     
     // Get user profile
-    const profile = window.getUserProfile ? window.getUserProfile(message.sender) : { color: '#ffffff' };
+    const profile = window.getUserProfile ? await window.getUserProfile(message.sender) : { color: '#ffffff' };
     
     // Format timestamp
     const timestamp = formatMessageTime(message.timestamp);
@@ -31,13 +31,16 @@ window.displayMessage = function(message) {
         profileImageHtml = `<img src="${profile.image}" alt="${message.sender}" class="message-profile-img">`;
     }
     
+    // Add VIP class if user is VIP
+    const vipClass = profile.isVIP ? 'vip-user' : '';
+    
     // Create message content with timestamp
     messageElement.innerHTML = `
         <div class="message-header">
             ${profileImageHtml}
             <div class="message-info">
                 <div class="timestamp">${timestamp}</div>
-                <div class="sender" style="color: ${profile.color}">${message.sender}</div>
+                <div class="sender ${vipClass}" style="color: ${profile.color}">${message.sender}</div>
             </div>
         </div>
         <div class="content">${message.content}</div>

@@ -1,14 +1,67 @@
 ## For now ->
-Adding a Profile page, at the home screen, it will be in the
-right top of the scren. It will have a "Image" that the user
-will be able to drop his image/picture, it will be in a ciruclar 
-moldure, the moldure will appear above the persons name in the 
-rooms.
-And also in the profile page, some colors so that you can choose to 
-put as your color of the name.
 
 
 
 
 ## For later ->
-VIP
+V.I.P, people who have VIP acess have a lot of things that they get
+0. I'll choose those who are V.I.P. in supabase, where everyone's
+username will be displayed in supabse, and i can choose in a row
+if user = vip, yes, no. 
+1. You are able to in the home screen to change the bg of the home
+scree, in a button in the bottom right corner
+2. You get, Emerald, Golden, Saphire, Radiant Vermilion, name colors
+3. Custom entry, in rooms "Bow to the presence of user_name"
+4. Custom exit, in rooms "Cry in tears user_name left..."
+5. Image space goes from 2mb to 5mb
+
+## VIP Feature Implementation Checklist
+
+### Database Setup (Supabase)
+- [x] Add `is_vip` boolean column to users table (default: false)
+- [x] Create admin interface/query to toggle VIP status
+- [x] Update getUserProfile to include VIP status
+
+### 1. Background Customization
+- [x] Add "Change Background" button to home screen (bottom right)
+- [x] Only visible if user is VIP
+- [x] Create background selection modal with options:
+  - [x] Preset backgrounds (5-6 options)
+  - [x] Custom color picker
+  - [x] Upload custom image option
+- [x] Save background preference to localStorage
+- [x] Apply saved background on app load
+
+### 2. VIP Name Colors
+- [x] Add VIP color options to profile page:
+  - [x] Emerald (#50C878)
+  - [x] Golden (#FFD700)
+  - [x] Sapphire (#0F52BA)
+  - [x] Radiant Vermilion (#E34234)
+- [x] Show VIP colors only if user.is_vip = true
+- [x] Add sparkle/crown icon above in the middle of VIP usernames
+
+### 3. Custom Entry Messages
+- [x] Modify showUserJoinNotification function
+- [x] Check if joining user is VIP
+- [x] If VIP: show "👑 Bow to the presence of [username]"
+- [x] Use special styling (gold background, italic, bold larger text)
+- [x] Longer display time (12 seconds instead of 8)
+
+### 4. Custom Exit Messages
+- [x] Modify showUserLeaveNotification function
+- [x] Check if leaving user is VIP
+- [x] If VIP: show "Cry in tears [username] has left..."
+- [x] Use special styling (red background, italic, bold, larger text)
+- [x] Longer display time (12 seconds instead of 8)
+
+### 5. Increased Image Upload Size
+- [x] Update profile image upload validation
+- [x] Regular users: max 2MB
+- [x] VIP users: max 5MB
+- [x] Show error message if file too large
+- [xw] Display remaining space indicator
+
+### Additional VIP Features // For later
+- [ ] Animated username effects
+

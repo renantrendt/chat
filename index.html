@@ -32,6 +32,7 @@
         <!-- Home Screen -->
         <div id="home-screen" class="screen active">
             <button id="profile-btn" class="profile-btn">Profile</button>
+            <button id="change-bg-btn" class="change-bg-btn" style="display: none;">Change Background</button>
             <div class="logo">
                 <h1>Talk with your friends in school</h1>
             </div>
@@ -52,6 +53,41 @@
                         <!-- Last visited rooms will be populated here dynamically -->
                         <div class="no-rooms-message" id="no-rooms-message">No rooms visited yet</div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Background Selection Modal -->
+        <div id="bg-modal" class="bg-modal">
+            <div class="bg-modal-content">
+                <span class="close-modal">&times;</span>
+                <h2>Choose Background</h2>
+                
+                <div class="bg-options">
+                    <h3>Preset Backgrounds</h3>
+                    <div class="preset-backgrounds">
+                        <div class="bg-option" data-bg="gradient1" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                        <div class="bg-option" data-bg="gradient2" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"></div>
+                        <div class="bg-option" data-bg="gradient3" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);"></div>
+                        <div class="bg-option" data-bg="gradient4" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);"></div>
+                        <div class="bg-option" data-bg="gradient5" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);"></div>
+                        <div class="bg-option" data-bg="gradient6" style="background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);"></div>
+                    </div>
+                    
+                    <h3>Custom Color</h3>
+                    <div class="custom-bg-section">
+                        <input type="color" id="custom-bg-color" value="#36393f">
+                        <button id="apply-color-bg">Apply Color</button>
+                    </div>
+                    
+                    <h3>Upload Image</h3>
+                    <div class="upload-bg-section">
+                        <input type="file" id="bg-image-input" accept="image/*" style="display: none;">
+                        <button id="upload-bg-btn">Choose Image</button>
+                        <span id="bg-file-name"></span>
+                    </div>
+                    
+                    <button id="reset-bg-btn" class="reset-bg-btn">Reset to Default</button>
                 </div>
             </div>
         </div>
@@ -86,6 +122,26 @@
                         <div class="color-option" data-color="#ff9ff3" style="background-color: #ff9ff3;"></div>
                         <div class="color-option" data-color="#a29bfe" style="background-color: #a29bfe;"></div>
                     </div>
+                    
+                    <!-- VIP Colors -->
+                    <div id="vip-colors-section" style="display: none;">
+                        <h3>VIP Exclusive Colors ✨</h3>
+                        <div class="color-options vip-colors">
+                            <div class="color-option vip-color" data-color="#50C878" style="background-color: #50C878;" title="Emerald">
+                                <span class="vip-badge">VIP</span>
+                            </div>
+                            <div class="color-option vip-color" data-color="#FFD700" style="background-color: #FFD700;" title="Golden">
+                                <span class="vip-badge">VIP</span>
+                            </div>
+                            <div class="color-option vip-color" data-color="#0F52BA" style="background-color: #0F52BA;" title="Sapphire">
+                                <span class="vip-badge">VIP</span>
+                            </div>
+                            <div class="color-option vip-color" data-color="#E34234" style="background-color: #E34234;" title="Radiant Vermilion">
+                                <span class="vip-badge">VIP</span>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="custom-color-section">
                         <label for="custom-color">Custom color:</label>
                         <input type="color" id="custom-color" value="#ffffff">
@@ -154,6 +210,7 @@
     <script src="supabase-config.js"></script>
     <script src="app-supabase.js"></script>
     <script src="profile.js"></script>
+    <script src="vip-background.js"></script>
     <script src="room-presence.js"></script>
     <script src="message-status.js"></script>
     <script src="message-status-integration.js"></script>

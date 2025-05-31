@@ -216,37 +216,69 @@ function initRoomPresence(roomCode, username) {
 }
 
 // Show notification when a user joins
-function showUserJoinNotification(username) {
+async function showUserJoinNotification(username) {
     const notification = document.getElementById('user-join-notification');
     if (!notification) return;
     
-    // Set the notification text
-    notification.textContent = `${username} joined the room`;
+    // Check if user is VIP
+    let isVIP = false;
+    if (window.checkVIPStatus) {
+        isVIP = await window.checkVIPStatus(username);
+    }
+    
+    // Set the notification text based on VIP status
+    if (isVIP) {
+        notification.innerHTML = `👑 Bow to the presence of <strong>${username}</strong>`;
+        notification.classList.add('vip');
+    } else {
+        notification.textContent = `${username} joined the room`;
+        notification.classList.remove('vip');
+    }
     
     // Show the notification
     notification.classList.add('show');
     
-    // Hide after 8 seconds
+    // Hide after appropriate time (12 seconds for VIP, 8 for regular)
+    const displayTime = isVIP ? 12000 : 8000;
     setTimeout(() => {
         notification.classList.remove('show');
-    }, 8000);
+        if (isVIP) {
+            notification.classList.remove('vip');
+        }
+    }, displayTime);
 }
 
 // Show notification when a user leaves
-function showUserLeaveNotification(username) {
+async function showUserLeaveNotification(username) {
     const notification = document.getElementById('user-leave-notification');
     if (!notification) return;
     
-    // Set the notification text
-    notification.textContent = `${username} left the room`;
+    // Check if user is VIP
+    let isVIP = false;
+    if (window.checkVIPStatus) {
+        isVIP = await window.checkVIPStatus(username);
+    }
+    
+    // Set the notification text based on VIP status
+    if (isVIP) {
+        notification.innerHTML = `Cry in tears <strong>${username}</strong> has left...`;
+        notification.classList.add('vip');
+    } else {
+        notification.textContent = `${username} left the room`;
+        notification.classList.remove('vip');
+    }
     
     // Show the notification
     notification.classList.add('show');
     
-    // Hide after 8 seconds
+    // Hide after appropriate time (12 seconds for VIP, 8 for regular)
+    const displayTime = isVIP ? 12000 : 8000;
     setTimeout(() => {
         notification.classList.remove('show');
-    }, 8000);
+        if (isVIP) {
+            notification.classList.remove('vip');
+        }
+    }, displayTime);
 }
 
 // Clean up presence tracking
