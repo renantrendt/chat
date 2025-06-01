@@ -1,22 +1,110 @@
 ### Idea:
-[Do 2nd, second and do 1st first]
+[Do React first, then Reply second]
 So a little above in the right corner of all msgs, there will be a 
 little arrow going down, when you press it, it will show the following options => Reply, and React:
 
-2nd
+Phase 1 (Priority)
+React == When you click react, a list with most used emojis 
+(Heart, Like, Happy face, and Laugh. ❤️👍😁🤣😂). and then after 
+all of those emojis a + sign will be on its right side, when you click you get access to all the emojis in a pop up. When you click in any of the emojis the emoji will appear below the msg that you reacted.  
+
+Phase 2
 Reply == the next msg I send will have a little box above it, with 
-the msg from the other person. (e.g. B send a msg saying "Hi how are you? C send a msg using the reply feature saying "I'm good thanks". C can't reply to him self.). The little box will appeaer above the msg person e.g. C send with the and inside the box will have the msg that e.g. person B send. [You can reply to your self]
+the msg from the other person. (e.g. B sends a msg saying "Hi how are you?" C sends a msg using the reply feature saying "I'm good thanks". C can't reply to himself.). The little box will appear above the msg person e.g. C sends with the and inside the box will have the msg that e.g. person B sent. [You can reply to yourself]
 
-1st
-React == When you click react, a list with most used emojis (Heart, Like, Happy face, and Laugh. ❤️👍😁🤣😂). and then after all of those emojis a + sing will be on it's right side, when you click you get acess to all the emojis. When you  click in any of the emojis the emoji will appear below the msg that you reacted,  
+### Clarification:
 
-### Exclarification:
+**Message Actions UI:**
+- Dropdown arrow appears in top-right corner of each message on when the user presses it
+- Dropdown shows two options: "React" and "Reply"
 
+**React Feature:**
+- Quick access to 5 most common emojis: ❤️👍😁🤣😂
+- Plus (+) button opens full emoji picker popup
+- Reactions appear as small badges below the message
+- Multiple users can react with same emoji (show count)
+- Users can see who reacted by tapping the reaction
+- Users can unreact by clicking their existing reaction
+- A user can only react with one emoji per messege 
+- When a user react with something, and then reacts with something else it will just keep the newest one 
 
+**Reply Feature:**
+- Creates a quoted message reference above new message
+- Shows original sender's name and partial message text
+- Clicking quoted message scrolls to original message
+- Self-replies are allowed
+- Reply chain visualization (threading)
 
 ### Implementation:
 
+**Frontend Structure:**
+```
+components/
+├── Message/
+│   ├── Message.tsx (main message component)
+│   ├── MessageActions.tsx (dropdown with React/Reply)
+│   ├── ReactionBar.tsx (emoji reactions below message)
+│   └── ReplyQuote.tsx (quoted message reference)
+├── EmojiPicker/
+│   ├── QuickReactions.tsx (common emojis)
+│   └── EmojiPopup.tsx (full emoji picker)
+└── Chat/
+    └── MessageList.tsx (handles scrolling to replies)
+```
 
+**Data Models:**
+```typescript
+interface Message {
+  id: string;
+  content: string;
+  senderId: string;
+  timestamp: Date;
+  replyTo?: string; // message ID being replied to
+  reactions: Reaction[];
+}
 
+interface Reaction {
+  emoji: string;
+  users: string[]; // user IDs who reacted
+  count: number;
+}
+```
+
+**Key Features:**
+- State management for reactions and replies
+- Real-time updates for reactions across all users
+- Message threading/reply chain handling
+- Emoji picker integration
+- Smooth scrolling to referenced messages
 
 ### Check-list:
+
+**Phase 1 - React Feature:**
+- [ ] Create MessageActions dropdown component
+- [ ] Implement QuickReactions component with 5 common emojis
+- [ ] Build EmojiPopup with full emoji picker
+- [ ] Add ReactionBar component to display reactions below messages
+- [ ] Implement reaction state management (add/remove reactions)
+- [ ] Add real-time reaction updates across users
+- [ ] Handle reaction counts and user lists
+- [ ] Add hover/click states for reactions
+- [ ] Test reaction persistence and synchronization
+
+**Phase 2 - Reply Feature:**
+- [ ] Create ReplyQuote component for message references
+- [ ] Implement reply state management in chat
+- [ ] Add quoted message UI above new messages
+- [ ] Handle click-to-scroll functionality for quoted messages
+- [ ] Implement reply threading logic
+- [ ] Add visual indicators for reply chains
+- [ ] Test self-replies and reply-to-reply scenarios
+- [ ] Handle edge cases (deleted messages, long message text)
+
+**General:**
+- [ ] Add animations/transitions for smooth UX
+- [ ] Implement responsive design for mobile
+- [ ] Add accessibility features (ARIA labels, keyboard navigation)
+- [ ] Write unit tests for components
+- [ ] Perform integration testing
+- [ ] Optimize performance for large message lists
+- [ ] Add error handling and fallbacks

@@ -99,7 +99,7 @@ async function initApp() {
     if (window.initProfile) {
         await window.initProfile();
     }
-    
+
     // Check Supabase connection
     try {
         // Test connection with the already initialized client
@@ -492,12 +492,23 @@ async function loadMessages(roomCode) {
         
         console.log(`Loaded ${data.length} messages for room ${roomCode}`);
         
-        // Display existing messages
+        // Display existing messages in chronological order
         if (data && data.length > 0) {
-            data.forEach(message => {
-                messages.push(message);
-                displayMessage(message);
+            // Explicitly sort by timestamp to ensure correct order
+            const sortedMessages = data.sort((a, b) => {
+                const timeA = new Date(a.timestamp).getTime();
+                const timeB = new Date(b.timestamp).getTime();
+                return timeA - timeB; // Ascending order (oldest first)
             });
+            
+            // Store sorted messages
+            messages = [...sortedMessages];
+            
+            // Clear container and display messages in order
+            messagesContainer.innerHTML = '';
+            for (const message of messages) {
+                await displayMessage(message);
+            }
             
             // Scroll to bottom
             scrollToBottom();
@@ -528,14 +539,17 @@ function subscribeToMessages(roomCode) {
                 table: 'messages',
                 filter: `room_code=eq.${roomCode}`
             }, 
-            (payload) => {
+            async (payload) => {
                 const newMessage = payload.new;
                 console.log('Real-time message received:', newMessage);
                 
                 // Only display if it's not already in our messages array
                 if (!messages.some(m => m.id === newMessage.id)) {
+                    // Add to messages array
                     messages.push(newMessage);
-                    displayMessage(newMessage);
+                    
+                    // Simply display the new message at the bottom (it should be newest)
+                    await displayMessage(newMessage);
                     scrollToBottom();
                 }
             }
@@ -569,13 +583,16 @@ async function sendMessage(content) {
         
         console.log('Message sent successfully:', data);
         
-        // Display the message immediately without waiting for subscription
+        // Display the message immediately for responsiveness
         if (data && data.length > 0) {
             const newMessage = data[0];
             // Check if this message is already in our messages array
             if (!messages.some(m => m.id === newMessage.id)) {
+                // Add to messages array
                 messages.push(newMessage);
-                displayMessage(newMessage);
+                
+                // Display at the bottom (sent messages are always newest)
+                await displayMessage(newMessage);
                 scrollToBottom();
             }
         }
