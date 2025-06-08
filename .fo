@@ -1,0 +1,31 @@
+Phase 1: Message Reaction System
+
+## Overview
+Create a message reaction system that allows users to react to messages with emojis.
+
+## User Flow
+1. **Down Arrow Access**: Each message displays a down arrow that users can click. The arrow is fixed so it is always there 
+2. **React Button**: Clicking the down arrow opens a small popup with a "React" button
+3. **Emoji Selector**: pre-selected emojis: "😅❤️🤣👍😂☠️", when clicked appear below the msg reacted with a blue bg
+4. **Additional Emojis**: A "+" button on the right side of the emoji picker opens a full emoji picker for more options
+5. **Reaction Display**: Selected emojis appear horizontally below the message they were reacted to
+
+## Reaction Rules
+- **One Reaction Per User Per Message**: Each user can only have ONE active reaction per message
+- **Reaction Replacement**: If a user picks a new emoji (e.g., changes from ☠️ to 😁), it replaces their previous reaction
+- **Multiple Users Same Emoji**: When multiple users react with the same emoji, show count (e.g., "☠️3" for 3 users)
+- **Remove Own Reactions**: Users can click their own existing reaction emoji to remove it
+- **Reaction Persistence**: Reactions are stored and persist across sessions
+
+## Technical Notes
+- Reactions table already exists in database
+- Popup positioning: Emoji picker appears above/below the "React" button
+- Display format: Reactions shown in horizontal row below each message
+
+## Example
+User B says: "How are you?"
+User A reacts with 👍
+Result: 👍 appears below the message
+
+If User C also reacts with 👍:
+Result: 👍2 appears below the message

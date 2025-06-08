@@ -46,6 +46,115 @@ const SAVED_CONVERSATIONS_KEY = 'msg_saved_conversations';
 window.currentUser = null;
 window.currentRoom = null;
 
+// Centralized Subscription Manager
+const subscriptionManager = {
+    subscriptions: new Map(),
+    timers: new Map(),
+    observers: new Map(),
+    
+    // Register a subscription for tracking
+    register(key, subscription, type = 'subscription') {
+        console.log(`Registering ${type}: ${key}`);
+        this.subscriptions.set(key, { subscription, type });
+    },
+    
+    // Register a timer for tracking
+    registerTimer(key, timerId) {
+        console.log(`Registering timer: ${key}`);
+        this.timers.set(key, timerId);
+    },
+    
+    // Register an observer for tracking
+    registerObserver(key, observer) {
+        console.log(`Registering observer: ${key}`);
+        this.observers.set(key, observer);
+    },
+    
+    // Clean up all subscriptions in proper order
+    async cleanupAll() {
+        console.log('Starting coordinated cleanup...');
+        const errors = [];
+        
+        // 1. Clear all timers first (they might interfere with cleanup)
+        for (const [key, timerId] of this.timers) {
+            try {
+                console.log(`Clearing timer: ${key}`);
+                clearTimeout(timerId);
+                clearInterval(timerId);
+            } catch (error) {
+                console.error(`Error clearing timer ${key}:`, error);
+                errors.push(`Timer ${key}: ${error.message}`);
+            }
+        }
+        this.timers.clear();
+        
+        // 2. Disconnect all observers
+        for (const [key, observer] of this.observers) {
+            try {
+                console.log(`Disconnecting observer: ${key}`);
+                if (observer && typeof observer.disconnect === 'function') {
+                    observer.disconnect();
+                }
+            } catch (error) {
+                console.error(`Error disconnecting observer ${key}:`, error);
+                errors.push(`Observer ${key}: ${error.message}`);
+            }
+        }
+        this.observers.clear();
+        
+        // 3. Unsubscribe from all subscriptions in reverse order (LIFO)
+        const subscriptionEntries = Array.from(this.subscriptions.entries()).reverse();
+        for (const [key, { subscription, type }] of subscriptionEntries) {
+            try {
+                console.log(`Unsubscribing from ${type}: ${key}`);
+                if (subscription && typeof subscription.unsubscribe === 'function') {
+                    await subscription.unsubscribe();
+                } else if (subscription && typeof subscription.untrack === 'function') {
+                    // For presence channels
+                    subscription.untrack();
+                    if (typeof subscription.unsubscribe === 'function') {
+                        await subscription.unsubscribe();
+                    }
+                }
+            } catch (error) {
+                console.error(`Error unsubscribing from ${key}:`, error);
+                errors.push(`Subscription ${key}: ${error.message}`);
+            }
+        }
+        this.subscriptions.clear();
+        
+        if (errors.length > 0) {
+            console.warn('Cleanup completed with errors:', errors);
+        } else {
+            console.log('All subscriptions cleaned up successfully');
+        }
+        
+        return { success: errors.length === 0, errors };
+    },
+    
+    // Clean up specific subscription
+    async cleanup(key) {
+        if (this.subscriptions.has(key)) {
+            const { subscription, type } = this.subscriptions.get(key);
+            try {
+                console.log(`Cleaning up ${type}: ${key}`);
+                if (subscription && typeof subscription.unsubscribe === 'function') {
+                    await subscription.unsubscribe();
+                }
+                this.subscriptions.delete(key);
+                return { success: true };
+            } catch (error) {
+                console.error(`Error cleaning up ${key}:`, error);
+                return { success: false, error: error.message };
+            }
+        }
+        return { success: true }; // Already cleaned or doesn't exist
+    }
+};
+
+// Make subscription manager globally accessible
+window.subscriptionManager = subscriptionManager;
+
 // Initialize App
 async function initApp() {
     // Check if username exists in local storage
@@ -354,6 +463,16 @@ async function enterRoom(roomCode) {
     // Load messages for this room
     await loadMessages(roomCode);
     
+    // Initialize reaction system for this room
+    if (window.subscribeToReactions) {
+        window.subscribeToReactions();
+    }
+    
+    // Load all reactions for displayed messages
+    if (window.loadAllReactions) {
+        await window.loadAllReactions();
+    }
+    
     // Clear unread count for this room
     if (window.clearUnreadForRoom) {
         window.clearUnreadForRoom(roomCode);
@@ -388,35 +507,54 @@ async function enterRoom(roomCode) {
     messageInput.focus();
 }
 
-function leaveRoom() {
-    console.log('Leaving room:', currentRoom);
+async function leaveRoom() {
+    const roomToLeave = currentRoom; // Store room before clearing
+    console.log('Leaving room:', roomToLeave);
     
-    // Clean up room presence
-    if (window.cleanupRoomPresence) {
-        window.cleanupRoomPresence();
+    try {
+        // Use centralized cleanup for coordinated subscription management
+        const cleanupResult = await subscriptionManager.cleanupAll();
+        
+        if (!cleanupResult.success) {
+            console.warn('Some cleanup operations failed:', cleanupResult.errors);
+        }
+        
+        // Additional cleanup for systems that might need room context
+        try {
+            // Mark user as offline for this room
+            if (window.markUserOffline) {
+                await window.markUserOffline();
+            }
+        } catch (error) {
+            console.error('Error marking user offline:', error);
+        }
+        
+        // Clean up UI elements that don't need subscriptions
+        try {
+            // Hide reaction menus
+            if (window.hideReactionMenu) {
+                window.hideReactionMenu();
+            }
+            
+            // Close emoji picker
+            if (window.closeEmojiPicker) {
+                window.closeEmojiPicker();
+            }
+        } catch (error) {
+            console.error('Error cleaning up UI elements:', error);
+        }
+        
+    } catch (error) {
+        console.error('Error during room cleanup:', error);
+    } finally {
+        // Reset room state AFTER cleanup is complete
+        currentRoom = null;
+        window.currentRoom = null;
+        messages = [];
+        messagesContainer.innerHTML = '';
+        
+        console.log('Room cleanup completed for:', roomToLeave);
     }
-    
-    // Clean up unread notifications
-    if (window.cleanupUnreadNotifications) {
-        window.cleanupUnreadNotifications();
-    }
-    
-    // Clean up message status tracking
-    if (window.cleanupMessageStatus) {
-        window.cleanupMessageStatus();
-    }
-    
-    // Unsubscribe from real-time updates
-    if (messageSubscription) {
-        messageSubscription.unsubscribe();
-        messageSubscription = null;
-    }
-    
-    // Reset room state
-    currentRoom = null;
-    window.currentRoom = null; // Also reset globally
-    messages = [];
-    messagesContainer.innerHTML = '';
 }
 
 function copyRoomCode() {
@@ -481,37 +619,33 @@ async function loadMessages(roomCode) {
     messages = [];
     
     try {
-        // Load existing messages from Supabase
+        // Load existing messages from Supabase with simple database ordering
         const { data, error } = await window.supabaseClient
             .from('messages')
             .select('*')
             .eq('room_code', roomCode)
-            .order('timestamp', { ascending: true });
+            .order('timestamp', { ascending: true }); // Simple database ordering
         
         if (error) throw error;
         
         console.log(`Loaded ${data.length} messages for room ${roomCode}`);
         
-        // Display existing messages in chronological order
+        // Store and display messages as-is from database (trust database ordering)
         if (data && data.length > 0) {
-            // Explicitly sort by timestamp to ensure correct order
-            const sortedMessages = data.sort((a, b) => {
-                const timeA = new Date(a.timestamp).getTime();
-                const timeB = new Date(b.timestamp).getTime();
-                return timeA - timeB; // Ascending order (oldest first)
-            });
+            messages = [...data]; // Just store them as database returned them
             
-            // Store sorted messages
-            messages = [...sortedMessages];
-            
-            // Clear container and display messages in order
+            // Display each message in order
             messagesContainer.innerHTML = '';
             for (const message of messages) {
                 await displayMessage(message);
             }
             
-            // Scroll to bottom
             scrollToBottom();
+            
+            // Load reactions for all displayed messages
+            if (window.loadAllReactions) {
+                await window.loadAllReactions();
+            }
         }
         
         // Subscribe to new messages
@@ -524,14 +658,12 @@ async function loadMessages(roomCode) {
 }
 
 function subscribeToMessages(roomCode) {
-    // Unsubscribe from any existing subscription
-    if (messageSubscription) {
-        messageSubscription.unsubscribe();
-    }
+    // Clean up any existing subscription
+    subscriptionManager.cleanup('messages');
     
     // Subscribe to real-time updates for this room
     messageSubscription = window.supabaseClient
-        .channel('messages_channel')
+        .channel(`messages_channel_${roomCode}`)
         .on('postgres_changes', 
             { 
                 event: 'INSERT', 
@@ -543,32 +675,39 @@ function subscribeToMessages(roomCode) {
                 const newMessage = payload.new;
                 console.log('Real-time message received:', newMessage);
                 
-                // Only display if it's not already in our messages array
+                // Verify we're still in the same room
+                if (currentRoom !== roomCode) {
+                    return;
+                }
+                
+                // Only process if it's not already in our messages array
                 if (!messages.some(m => m.id === newMessage.id)) {
-                    // Add to messages array
+                    // Just append new messages (they should be newest)
                     messages.push(newMessage);
-                    
-                    // Simply display the new message at the bottom (it should be newest)
                     await displayMessage(newMessage);
                     scrollToBottom();
                 }
             }
         )
         .subscribe((status) => {
-            console.log('Subscription status:', status);
+            console.log(`Subscription status for room ${roomCode}:`, status);
         });
+    
+    // Register with subscription manager
+    subscriptionManager.register('messages', messageSubscription, 'message-updates');
 }
 
 async function sendMessage(content) {
     if (!currentRoom || !currentUser || !content) return;
     
     try {
-        // Create message object
+        // Create message object with status
         const message = {
             room_code: currentRoom,
             sender: currentUser,
             content: content,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            status: 'sent' // Add default status
         };
         
         console.log('Sending message:', message);
@@ -583,22 +722,16 @@ async function sendMessage(content) {
         
         console.log('Message sent successfully:', data);
         
-        // Display the message immediately for responsiveness
-        if (data && data.length > 0) {
-            const newMessage = data[0];
-            // Check if this message is already in our messages array
-            if (!messages.some(m => m.id === newMessage.id)) {
-                // Add to messages array
-                messages.push(newMessage);
-                
-                // Display at the bottom (sent messages are always newest)
-                await displayMessage(newMessage);
-                scrollToBottom();
-            }
-        }
+        // Let the real-time subscription handle displaying the message
+        // This ensures proper chronological ordering and prevents duplicates
         
         // Clear input
         messageInput.value = '';
+        
+        // Update delivery status for other users (if function exists)
+        if (window.updateMessageDeliveryStatus) {
+            await window.updateMessageDeliveryStatus();
+        }
         
     } catch (error) {
         console.error('Error sending message:', error);
@@ -609,6 +742,12 @@ async function sendMessage(content) {
 async function displayMessage(message) {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message');
+    
+    // Add message ID and sender as data attributes for status tracking
+    if (message.id) {
+        messageElement.dataset.messageId = message.id;
+    }
+    messageElement.dataset.sender = message.sender;
     
     // Add class based on sender
     if (message.sender === currentUser) {
@@ -644,8 +783,32 @@ async function displayMessage(message) {
         <div class="content">${message.content}</div>
     `;
     
+    // Add status for sent messages
+    if (message.sender === currentUser && message.status && window.addMessageStatus) {
+        window.addMessageStatus(messageElement, message.status);
+    }
+    
     // Add to container
     messagesContainer.appendChild(messageElement);
+    
+    // Add reaction arrow and functionality
+    console.log('Checking for reaction system availability...', {
+        hasFunction: !!window.addReactionArrowToMessage,
+        messageId: message.id,
+        systemInitialized: window.reactionSystemInitialized
+    });
+    
+    if (window.addReactionArrowToMessage) {
+        console.log('Calling addReactionArrowToMessage for message:', message.id);
+        window.addReactionArrowToMessage(messageElement, message.id);
+    } else {
+        console.warn('window.addReactionArrowToMessage is not available');
+    }
+    
+    // Observe this message for read status (if not sent by current user)
+    if (window.visibilityObserver && message.sender !== currentUser) {
+        window.visibilityObserver.observe(messageElement);
+    }
     
     // Scroll to bottom
     scrollToBottom();

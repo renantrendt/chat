@@ -7,7 +7,7 @@ let messageStatusSubscription = null;
 
 // Start user activity tracking
 async function startActivityTracking() {
-    if (!currentUser || !currentRoom) return;
+    if (!window.currentUser || !window.currentRoom) return;
     
     // Update activity immediately
     await updateUserActivity();
@@ -16,6 +16,11 @@ async function startActivityTracking() {
     activityInterval = setInterval(async () => {
         await updateUserActivity();
     }, 30000);
+    
+    // Register timer with subscription manager
+    if (window.subscriptionManager) {
+        window.subscriptionManager.registerTimer('activity-heartbeat', activityInterval);
+    }
     
     // Update activity when user returns to tab
     document.addEventListener('visibilitychange', async () => {
@@ -35,13 +40,13 @@ function stopActivityTracking() {
 
 // Update user activity in database
 async function updateUserActivity() {
-    if (!currentUser || !currentRoom) return;
+    if (!window.currentUser || !window.currentRoom) return;
     
     try {
         // Use the new update_user_heartbeat function
-        const { error } = await supabaseClient.rpc('update_user_heartbeat', {
-            p_username: currentUser,
-            p_room_code: currentRoom
+        const { error } = await window.supabaseClient.rpc('update_user_heartbeat', {
+            p_username: window.currentUser,
+            p_room_code: window.currentRoom
         });
         
         if (error) {
@@ -57,11 +62,11 @@ async function updateUserActivity() {
 
 // Update delivery status for messages in room
 async function updateMessageDeliveryStatus() {
-    if (!currentRoom) return;
+    if (!window.currentRoom) return;
     
     try {
-        const { error } = await supabaseClient.rpc('update_message_delivery_status', {
-            p_room_code: currentRoom
+        const { error } = await window.supabaseClient.rpc('update_message_delivery_status', {
+            p_room_code: window.currentRoom
         });
         
         if (error) {
@@ -74,13 +79,13 @@ async function updateMessageDeliveryStatus() {
 
 // Mark message as read
 async function markMessageAsRead(messageId) {
-    if (!currentUser || !currentRoom) return;
+    if (!window.currentUser || !window.currentRoom) return;
     
     try {
-        const { error } = await supabaseClient.rpc('mark_message_read', {
+        const { error } = await window.supabaseClient.rpc('mark_message_read', {
             p_message_id: messageId,
-            p_username: currentUser,
-            p_room_code: currentRoom
+            p_username: window.currentUser,
+            p_room_code: window.currentRoom
         });
         
         if (error) {
@@ -98,7 +103,7 @@ function setupMessageVisibilityObserver() {
     }
     
     const options = {
-        root: messagesContainer,
+        root: document.getElementById('messages-container'),
         rootMargin: '0px',
         threshold: 0.5
     };
@@ -111,12 +116,17 @@ function setupMessageVisibilityObserver() {
                 const sender = messageElement.dataset.sender;
                 
                 // Only mark as read if not sent by current user
-                if (messageId && sender !== currentUser) {
+                if (messageId && sender !== window.currentUser) {
                     markMessageAsRead(messageId);
                 }
             }
         });
     }, options);
+    
+    // Register observer with subscription manager
+    if (window.subscriptionManager) {
+        window.subscriptionManager.registerObserver('visibility-observer', visibilityObserver);
+    }
 }
 
 // Add status icon to message element
@@ -158,25 +168,25 @@ function addMessageStatus(messageElement, status) {
 
 // Subscribe to message status updates
 async function subscribeToMessageStatus() {
-    if (!currentRoom) return;
+    if (!window.currentRoom) return;
     
-    console.log('Setting up message status subscription for room:', currentRoom);
+    console.log('Setting up message status subscription for room:', window.currentRoom);
     
-    // Unsubscribe from previous subscription
-    if (messageStatusSubscription) {
-        await messageStatusSubscription.unsubscribe();
+    // Clean up previous subscription
+    if (window.subscriptionManager) {
+        await window.subscriptionManager.cleanup('message-status');
     }
     
     // Subscribe to message updates for current room
-    messageStatusSubscription = supabaseClient
-        .channel(`message-status-${currentRoom}`)
+    messageStatusSubscription = window.supabaseClient
+        .channel(`message-status-${window.currentRoom}`)
         .on(
             'postgres_changes',
             {
                 event: 'UPDATE',
                 schema: 'public',
                 table: 'messages',
-                filter: `room_code=eq.${currentRoom}`
+                filter: `room_code=eq.${window.currentRoom}`
             },
             (payload) => {
                 console.log('Message status update received:', payload);
@@ -194,35 +204,27 @@ async function subscribeToMessageStatus() {
         .subscribe((status) => {
             console.log('Message status subscription:', status);
         });
+    
+    // Register with subscription manager
+    if (window.subscriptionManager) {
+        window.subscriptionManager.register('message-status', messageStatusSubscription, 'status-updates');
+    }
 }
 
-// Clean up when leaving room
+// Clean up when leaving room - now handled by subscription manager
 function cleanupMessageStatus() {
-    stopActivityTracking();
-    
-    if (visibilityObserver) {
-        visibilityObserver.disconnect();
-        visibilityObserver = null;
-    }
-    
-    if (messageStatusSubscription) {
-        messageStatusSubscription.unsubscribe();
-        messageStatusSubscription = null;
-    }
-    
-    // Mark user as offline when leaving
-    if (currentUser) {
-        markUserOffline();
-    }
+    // Individual cleanup functions are now handled by subscription manager
+    // This function is kept for compatibility but does minimal work
+    console.log('Message status cleanup - handled by subscription manager');
 }
 
 // Mark user as offline
 async function markUserOffline() {
-    if (!currentUser) return;
+    if (!window.currentUser) return;
     
     try {
-        const { error } = await supabaseClient.rpc('update_user_online_status', {
-            p_username: currentUser,
+        const { error } = await window.supabaseClient.rpc('update_user_online_status', {
+            p_username: window.currentUser,
             p_is_online: false
         });
         
@@ -236,10 +238,10 @@ async function markUserOffline() {
 
 // Also mark offline when page unloads
 window.addEventListener('beforeunload', () => {
-    if (currentUser) {
+    if (window.currentUser) {
         // Use sendBeacon for reliability during page unload
         const data = JSON.stringify({
-            username: currentUser,
+            username: window.currentUser,
             is_online: false
         });
         navigator.sendBeacon('/api/mark-offline', data);
@@ -254,4 +256,9 @@ window.addMessageStatus = addMessageStatus;
 window.subscribeToMessageStatus = subscribeToMessageStatus;
 window.cleanupMessageStatus = cleanupMessageStatus;
 window.markMessageAsRead = markMessageAsRead;
-window.markUserOffline = markUserOffline; 
+window.markUserOffline = markUserOffline;
+// Make visibilityObserver accessible globally
+Object.defineProperty(window, 'visibilityObserver', {
+    get: () => visibilityObserver,
+    configurable: true
+}); 

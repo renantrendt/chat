@@ -58,6 +58,11 @@ function setUserOffline(roomCode, username) {
             removeUserFromPresence(roomCode, username);
         }, 45 * 60 * 1000); // 45 minutes
         
+        // Register timer with subscription manager
+        if (window.subscriptionManager) {
+            window.subscriptionManager.registerTimer(`presence-timer-${timerKey}`, cleanupTimers[timerKey]);
+        }
+        
         updatePresenceSidebar();
     }
 }
@@ -213,6 +218,18 @@ function initRoomPresence(roomCode, username) {
                 console.log('Presence tracking started:', presenceTrack);
             }
         });
+    
+    // Register presence channel with subscription manager
+    if (window.subscriptionManager) {
+        window.subscriptionManager.register('presence', presenceChannel, 'presence-tracking');
+    }
+    
+    // Register cleanup timers with subscription manager
+    if (window.subscriptionManager) {
+        Object.entries(cleanupTimers).forEach(([key, timerId]) => {
+            window.subscriptionManager.registerTimer(`presence-timer-${key}`, timerId);
+        });
+    }
 }
 
 // Show notification when a user joins
@@ -281,17 +298,11 @@ async function showUserLeaveNotification(username) {
     }, displayTime);
 }
 
-// Clean up presence tracking
+// Clean up presence tracking - now handled by subscription manager
 function cleanupRoomPresence() {
-    if (presenceChannel) {
-        presenceChannel.untrack();
-        presenceChannel.unsubscribe();
-        presenceChannel = null;
-    }
-    
-    // Clear all cleanup timers
-    Object.values(cleanupTimers).forEach(timer => clearTimeout(timer));
-    cleanupTimers = {};
+    // Subscriptions and timers are now handled by subscription manager
+    // This function is kept for compatibility
+    console.log('Room presence cleanup - handled by subscription manager');
 }
 
 // Handle page unload/close

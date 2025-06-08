@@ -1,0 +1,313 @@
+/* Message Reactions Styles */
+
+/* Reaction Arrow Button */
+.reaction-arrow {
+    background: none;
+    border: none;
+    color: #8e9297;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 14px;
+    margin-left: 8px;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+}
+
+.reaction-arrow:hover {
+    background-color: #40444b;
+    opacity: 1;
+}
+
+/* Reaction Menu (React button popup) */
+.reaction-menu {
+    background-color: #2f3136;
+    border: 1px solid #40444b;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    padding: 3px;
+    z-index: 1000;
+}
+
+.react-btn {
+    background-color: #5865f2;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.react-btn:hover {
+    background-color: #4752c4;
+}
+
+/* Emoji Selector (predefined emojis + plus button) */
+.emoji-selector {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    padding: 4px;
+    max-width: 220px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.predefined-emoji {
+    background: none;
+    border: none;
+    font-size: 16px;
+    padding: 3px 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    min-width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.predefined-emoji:hover {
+    background-color: #40444b;
+}
+
+.more-emojis-btn {
+    background-color: #40444b;
+    color: #dcddde;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: background-color 0.2s ease;
+    width: 26px;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.more-emojis-btn:hover {
+    background-color: #4f545c;
+}
+
+/* Emoji Picker Modal */
+.emoji-picker-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.emoji-picker-content {
+    background-color: #2f3136;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 400px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.emoji-picker-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #40444b;
+}
+
+.emoji-picker-header h3 {
+    color: #ffffff;
+    margin: 0;
+    font-size: 18px;
+}
+
+.emoji-picker-close {
+    background: none;
+    border: none;
+    color: #8e9297;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.emoji-picker-close:hover {
+    background-color: #40444b;
+    color: #ffffff;
+}
+
+.emoji-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+    padding: 15px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.emoji-option {
+    background: none;
+    border: none;
+    font-size: 20px;
+    padding: 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.emoji-option:hover {
+    background-color: #40444b;
+}
+
+/* Custom scrollbar for emoji grid */
+.emoji-grid::-webkit-scrollbar {
+    width: 8px;
+}
+
+.emoji-grid::-webkit-scrollbar-track {
+    background: #2f3136;
+    border-radius: 4px;
+}
+
+.emoji-grid::-webkit-scrollbar-thumb {
+    background: #40444b;
+    border-radius: 4px;
+}
+
+.emoji-grid::-webkit-scrollbar-thumb:hover {
+    background: #4f545c;
+}
+
+/* Reactions Container (below messages) */
+.reactions-container {
+    margin-top: 8px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.reaction-count {
+    background-color: #5865f2;
+    border: 1px solid #4752c4;
+    color: #ffffff;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+}
+
+.reaction-count:hover {
+    background-color: #4752c4;
+    border-color: #3c4fe0;
+}
+
+/* Own reaction styling - slightly brighter blue */
+.reaction-count.own-reaction {
+    background-color: #7289da;
+    border-color: #677bc4;
+    color: #ffffff;
+    font-weight: 500;
+}
+
+.reaction-count.own-reaction:hover {
+    background-color: #677bc4;
+    border-color: #5b6eaa;
+}
+
+/* Message layout adjustments */
+.message-header {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.message-info {
+    flex: 1;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+    .emoji-picker-content {
+        width: 95%;
+        max-height: 70vh;
+    }
+    
+    .emoji-grid {
+        grid-template-columns: repeat(6, 1fr);
+        padding: 10px;
+    }
+    
+    .emoji-option {
+        font-size: 18px;
+        padding: 6px;
+    }
+    
+    .predefined-emoji {
+        font-size: 14px;
+        min-width: 24px;
+        height: 24px;
+        padding: 2px 3px;
+    }
+    
+    .more-emojis-btn {
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        padding: 2px 3px;
+    }
+    
+    .reaction-arrow {
+        font-size: 12px;
+        padding: 1px 3px;
+    }
+    
+    .reactions-container {
+        margin-top: 6px;
+        gap: 3px;
+    }
+    
+    .reaction-count {
+        font-size: 12px;
+        padding: 1px 6px;
+        min-height: 20px;
+    }
+    
+    .emoji-selector {
+        max-width: 180px;
+        gap: 2px;
+        padding: 3px;
+    }
+    
+    .reaction-menu {
+        max-width: 90vw;
+    }
+} 

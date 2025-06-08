@@ -46,10 +46,9 @@ function markTabAsActive() {
 async function subscribeToUnreadMessages(roomCode) {
     if (!roomCode || !window.currentUser) return;
     
-    // Unsubscribe from previous subscription
-    if (unreadSubscription) {
-        await unreadSubscription.unsubscribe();
-        unreadSubscription = null;
+    // Clean up previous subscription
+    if (window.subscriptionManager) {
+        await window.subscriptionManager.cleanup('unread-notifications');
     }
     
     // Initialize count for this room if not exists
@@ -83,6 +82,11 @@ async function subscribeToUnreadMessages(roomCode) {
         .subscribe((status) => {
             console.log('Unread subscription status:', status);
         });
+    
+    // Register with subscription manager
+    if (window.subscriptionManager) {
+        window.subscriptionManager.register('unread-notifications', unreadSubscription, 'unread-tracking');
+    }
 }
 
 // Increment unread count for a room
@@ -140,12 +144,11 @@ function getTotalUnreadCount() {
     return total;
 }
 
-// Clean up when leaving a room
+// Clean up when leaving a room - now handled by subscription manager
 function cleanupUnreadNotifications() {
-    if (unreadSubscription) {
-        unreadSubscription.unsubscribe();
-        unreadSubscription = null;
-    }
+    // Subscriptions are now handled by subscription manager
+    // This function is kept for compatibility
+    console.log('Unread notifications cleanup - handled by subscription manager');
 }
 
 // Reset all unread counts
