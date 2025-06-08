@@ -7,7 +7,7 @@ Create a message reaction system that allows users to react to messages with emo
 1. **Down Arrow Access**: Each message displays a down arrow that users can click. The arrow is fixed so it is always there 
 2. **React Button**: Clicking the down arrow opens a small popup with a "React" button
 3. **Emoji Selector**: pre-selected emojis: "😅❤️🤣👍😂☠️", when clicked appear below the msg reacted with a blue bg
-4. **Additional Emojis**: A "+" button on the right side of the emoji picker opens a full emoji picker for more options
+4. **Additional Emojis**: A "+" button on the right side of the emoji picker opens a full emoji picker for more options (use emoji or unicode2 lybris)
 5. **Reaction Display**: Selected emojis appear horizontally below the message they were reacted to
 
 ## Reaction Rules

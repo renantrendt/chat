@@ -182,14 +182,31 @@ function handleReactionClicks(e) {
         // Handle + button clicks
         if (e.target.classList.contains('more-emojis-btn')) {
             e.preventDefault();
-            const messageElement = e.target.closest('.message');
+            console.log('🎯 + button clicked - opening full emoji picker');
             
-            if (messageElement && messageElement.dataset.messageId) {
-                const messageId = messageElement.dataset.messageId;
+            // Get messageId from the emoji selector menu (same as predefined emojis)
+            const emojiSelector = e.target.closest('.emoji-selector');
+            const menu = emojiSelector ? emojiSelector.closest('.reaction-menu') : null;
+            let messageId = null;
+            
+            if (menu && menu.dataset.messageId) {
+                messageId = menu.dataset.messageId;
+                console.log('📝 Found messageId from menu:', messageId);
+            } else {
+                // Fallback: try to find from closest message
+                const messageElement = e.target.closest('.message');
+                if (messageElement && messageElement.dataset.messageId) {
+                    messageId = messageElement.dataset.messageId;
+                    console.log('📝 Found messageId from message element:', messageId);
+                }
+            }
+            
+            if (messageId) {
+                console.log('🎨 Opening emoji picker for message:', messageId);
                 openEmojiPicker(messageId);
                 hideReactionMenu();
             } else {
-                console.warn('Reaction system: Could not find message element for more emojis click');
+                console.warn('❌ Could not find message ID for + button click');
             }
             return;
         }
@@ -385,21 +402,41 @@ function showEmojiSelector(reactBtn) {
 
 // Open full emoji picker modal
 function openEmojiPicker(messageId) {
+    console.log('🎨 Opening emoji picker modal for message:', messageId);
+    
+    if (!emojiPickerModal) {
+        console.error('❌ Emoji picker modal not initialized');
+        return;
+    }
+    
     currentReactionMessageId = messageId;
     emojiPickerModal.style.display = 'flex';
+    
+    console.log('✅ Emoji picker modal opened');
 }
 
 // Close emoji picker modal
 function closeEmojiPicker() {
-    emojiPickerModal.style.display = 'none';
+    console.log('❌ Closing emoji picker modal');
+    
+    if (emojiPickerModal) {
+        emojiPickerModal.style.display = 'none';
+    }
+    
     currentReactionMessageId = null;
+    console.log('✅ Emoji picker modal closed');
 }
 
 // Select emoji from picker
 function selectEmoji(emoji) {
+    console.log('🎯 Emoji selected from full picker:', emoji, 'for message:', currentReactionMessageId);
+    
     if (currentReactionMessageId) {
+        console.log('✅ Adding reaction from full picker');
         addReaction(currentReactionMessageId, emoji);
         closeEmojiPicker();
+    } else {
+        console.warn('❌ No message ID set for emoji picker');
     }
 }
 
@@ -914,6 +951,26 @@ function testReactionPopup() {
     }, 30000);
 }
 
+// Test function for emoji picker
+function testEmojiPicker() {
+    console.log('🎨 Testing emoji picker...');
+    
+    // Find a message to test with
+    const messageElement = document.querySelector('.message');
+    if (!messageElement || !messageElement.dataset.messageId) {
+        console.error('❌ No message with ID found to test with');
+        return;
+    }
+    
+    const messageId = messageElement.dataset.messageId;
+    console.log('📝 Using message ID:', messageId);
+    
+    // Open emoji picker
+    openEmojiPicker(messageId);
+    
+    console.log('✅ Emoji picker test initiated. The modal should be visible now!');
+}
+
 // Make functions available globally
 window.initReactionSystem = initReactionSystem;
 window.addReactionArrowToMessage = addReactionArrowToMessage;
@@ -925,6 +982,7 @@ window.closeEmojiPicker = closeEmojiPicker;
 window.validateReactionSystem = validateReactionSystem;
 window.cleanupReactionEventListeners = cleanupReactionEventListeners;
 window.testReactionPopup = testReactionPopup;
+window.testEmojiPicker = testEmojiPicker;
 
 // Initialize when DOM is ready - handle different loading states
 if (document.readyState === 'loading') {
