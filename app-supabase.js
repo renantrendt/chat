@@ -612,48 +612,391 @@ function showCopiedFeedback() {
     }, 2000);
 }
 
-// Message Functions
+// Message Functions - Optimized for performance
 async function loadMessages(roomCode) {
+    console.log('🚀 Fast loading messages for room:', roomCode);
+    
     // Clear messages container
     messagesContainer.innerHTML = '';
     messages = [];
     
+    // Initialize presence system immediately (don't wait for messages)
+    if (window.initRoomPresence) {
+        window.initRoomPresence(roomCode, currentUser);
+    }
+    
     try {
-        // Load existing messages from Supabase with simple database ordering
+        // Load only recent messages first (last 100) for fast initial load
         const { data, error } = await window.supabaseClient
             .from('messages')
             .select('*')
             .eq('room_code', roomCode)
-            .order('timestamp', { ascending: true }); // Simple database ordering
+            .order('timestamp', { ascending: false })
+            .limit(100); // Only load recent messages initially
         
         if (error) throw error;
         
-        console.log(`Loaded ${data.length} messages for room ${roomCode}`);
+        console.log(`📦 Loaded ${data.length} recent messages for room ${roomCode}`);
         
-        // Store and display messages as-is from database (trust database ordering)
         if (data && data.length > 0) {
-            messages = [...data]; // Just store them as database returned them
+            // Reverse to get chronological order
+            messages = [...data.reverse()];
             
-            // Display each message in order
-            messagesContainer.innerHTML = '';
-            for (const message of messages) {
-                await displayMessage(message);
+            // Show loading indicator
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'messages-loading';
+            loadingDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #888;">Loading messages...</div>';
+            messagesContainer.appendChild(loadingDiv);
+            
+            // Display messages in parallel (much faster)
+            const messagePromises = messages.map(message => displayMessageFast(message));
+            await Promise.all(messagePromises);
+            
+            // Remove loading indicator
+            if (loadingDiv.parentNode) {
+                loadingDiv.remove();
+            }
+            
+            // Add "Load More" button if we got 100 messages (means there might be more)
+            if (data.length === 100) {
+                addLoadMoreButton(roomCode);
             }
             
             scrollToBottom();
             
-            // Load reactions for all displayed messages
-            if (window.loadAllReactions) {
-                await window.loadAllReactions();
-            }
+            // Load enhanced features after basic messages are shown (non-blocking)
+            setTimeout(() => {
+                loadMessageEnhancements();
+            }, 100);
         }
         
         // Subscribe to new messages
         subscribeToMessages(roomCode);
         
+        console.log('✅ Fast message loading completed');
+        
     } catch (error) {
-        console.error('Error loading messages:', error);
+        console.error('❌ Error loading messages:', error);
         alert('Failed to load messages. Please try refreshing the page.');
+    }
+}
+
+// Fast message display without blocking operations
+async function displayMessageFast(message) {
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message');
+    
+    // Add message ID and sender as data attributes
+    if (message.id) {
+        messageElement.dataset.messageId = message.id;
+    }
+    messageElement.dataset.sender = message.sender;
+    
+    // Add class based on sender
+    if (message.sender === currentUser) {
+        messageElement.classList.add('sent');
+    } else {
+        messageElement.classList.add('received');
+    }
+    
+    // Format timestamp
+    const timestamp = formatMessageTime(message.timestamp);
+    
+    // Create basic message content first (fast)
+    messageElement.innerHTML = `
+        <div class="message-header">
+            <div class="message-info">
+                <div class="timestamp">${timestamp}</div>
+                <div class="sender" style="color: #ffffff">${message.sender}</div>
+            </div>
+        </div>
+        <div class="content">${message.content}</div>
+    `;
+    
+    // Add to container immediately
+    messagesContainer.appendChild(messageElement);
+    
+    return messageElement;
+}
+
+// Load message enhancements after basic display (non-blocking)
+async function loadMessageEnhancements() {
+    console.log('🎨 Loading message enhancements...');
+    
+    try {
+        // Get all message elements
+        const messageElements = document.querySelectorAll('.message[data-message-id]');
+        
+        // Process enhancements in batches to avoid blocking
+        const batchSize = 10;
+        for (let i = 0; i < messageElements.length; i += batchSize) {
+            const batch = Array.from(messageElements).slice(i, i + batchSize);
+            
+            // Process batch in parallel
+            await Promise.all(batch.map(async (messageElement) => {
+                const messageId = messageElement.dataset.messageId;
+                const sender = messageElement.dataset.sender;
+                
+                // Find the original message data
+                const messageData = messages.find(m => m.id === messageId);
+                if (!messageData) return;
+                
+                // Get profile data
+                const profile = await window.getUserProfile(sender);
+                
+                // Update sender styling with profile data
+                const senderElement = messageElement.querySelector('.sender');
+                if (senderElement && profile) {
+                    senderElement.style.color = profile.color;
+                    if (profile.isVIP) {
+                        senderElement.classList.add('vip-user');
+                    }
+                }
+                
+                // Add profile image if exists
+                if (profile.image) {
+                    const messageHeader = messageElement.querySelector('.message-header');
+                    const profileImg = document.createElement('img');
+                    profileImg.src = profile.image;
+                    profileImg.alt = sender;
+                    profileImg.className = 'message-profile-img';
+                    messageHeader.insertBefore(profileImg, messageHeader.firstChild);
+                }
+                
+                // Add reply preview if this is a reply
+                if (messageData.reply_to_message_id) {
+                    const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
+                    if (replyPreviewHtml) {
+                        messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
+                    }
+                }
+                
+                // Add reaction arrow
+                if (window.addReactionArrowToMessage) {
+                    window.addReactionArrowToMessage(messageElement, messageId);
+                }
+                
+                // Add message status for sent messages
+                if (messageData.sender === currentUser && messageData.status && window.addMessageStatus) {
+                    window.addMessageStatus(messageElement, messageData.status);
+                }
+            }));
+            
+            // Small delay between batches to keep UI responsive
+            if (i + batchSize < messageElements.length) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+        
+        // Load reactions for all messages (last, as it's least important)
+        if (window.loadAllReactions) {
+            setTimeout(() => {
+                window.loadAllReactions();
+            }, 200);
+        }
+        
+        console.log('✅ Message enhancements loaded');
+        
+    } catch (error) {
+        console.error('❌ Error loading message enhancements:', error);
+    }
+}
+
+// Add Load More button for older messages
+function addLoadMoreButton(roomCode) {
+    // Remove existing load more button if any
+    const existingButton = document.getElementById('load-more-messages');
+    if (existingButton) {
+        existingButton.remove();
+    }
+    
+    const loadMoreButton = document.createElement('div');
+    loadMoreButton.id = 'load-more-messages';
+    loadMoreButton.innerHTML = `
+        <button class="load-more-btn" onclick="loadMoreMessages('${roomCode}')">
+            📜 Load More Messages
+        </button>
+    `;
+    loadMoreButton.style.cssText = `
+        text-align: center;
+        padding: 15px;
+        border-bottom: 1px solid #333;
+        background: #1a1a1a;
+    `;
+    
+    // Add styling for the button
+    const style = document.createElement('style');
+    style.textContent = `
+        .load-more-btn {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #ffffff;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .load-more-btn:hover {
+            background: #3a3a3a;
+        }
+        .load-more-btn:disabled {
+            background: #1a1a1a;
+            color: #666;
+            cursor: not-allowed;
+        }
+    `;
+    if (!document.getElementById('load-more-styles')) {
+        style.id = 'load-more-styles';
+        document.head.appendChild(style);
+    }
+    
+    // Insert at the top of messages container
+    messagesContainer.insertBefore(loadMoreButton, messagesContainer.firstChild);
+}
+
+// Load older messages
+window.loadMoreMessages = async function(roomCode) {
+    const loadMoreButton = document.getElementById('load-more-messages');
+    if (!loadMoreButton) return;
+    
+    const button = loadMoreButton.querySelector('.load-more-btn');
+    const originalText = button.textContent;
+    
+    try {
+        // Disable button and show loading
+        button.disabled = true;
+        button.textContent = '⏳ Loading...';
+        
+        // Get oldest message timestamp for pagination
+        const oldestTimestamp = messages.length > 0 ? messages[0].timestamp : new Date().toISOString();
+        
+        // Load older messages
+        const { data, error } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .eq('room_code', roomCode)
+            .lt('timestamp', oldestTimestamp)
+            .order('timestamp', { ascending: false })
+            .limit(50); // Load 50 older messages
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+            console.log(`📦 Loaded ${data.length} older messages`);
+            
+            // Reverse to get chronological order and prepend to messages
+            const olderMessages = data.reverse();
+            messages.unshift(...olderMessages);
+            
+            // Display older messages at the top
+            const oldScrollHeight = messagesContainer.scrollHeight;
+            
+            // Create document fragment for better performance
+            const fragment = document.createDocumentFragment();
+            
+            // Display older messages in parallel
+            const messagePromises = olderMessages.map(message => displayMessageFast(message));
+            const messageElements = await Promise.all(messagePromises);
+            
+            // Add to fragment in reverse order (oldest first)
+            messageElements.reverse().forEach(element => {
+                fragment.appendChild(element);
+            });
+            
+            // Insert after load more button
+            messagesContainer.insertBefore(fragment, loadMoreButton.nextSibling);
+            
+            // Restore scroll position
+            const newScrollHeight = messagesContainer.scrollHeight;
+            messagesContainer.scrollTop = newScrollHeight - oldScrollHeight;
+            
+            // Load enhancements for new messages
+            setTimeout(() => {
+                loadMessageEnhancementsForRange(0, olderMessages.length);
+            }, 100);
+            
+            // Remove load more button if we got fewer than 50 messages (no more to load)
+            if (data.length < 50) {
+                loadMoreButton.remove();
+            } else {
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        } else {
+            // No more messages to load
+            loadMoreButton.remove();
+        }
+        
+    } catch (error) {
+        console.error('❌ Error loading more messages:', error);
+        button.disabled = false;
+        button.textContent = originalText;
+        alert('Failed to load more messages. Please try again.');
+    }
+};
+
+// Load enhancements for a specific range of messages
+async function loadMessageEnhancementsForRange(startIndex, count) {
+    try {
+        const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]')).slice(startIndex, startIndex + count);
+        
+        // Process in smaller batches for older messages
+        const batchSize = 5;
+        for (let i = 0; i < messageElements.length; i += batchSize) {
+            const batch = messageElements.slice(i, i + batchSize);
+            
+            await Promise.all(batch.map(async (messageElement) => {
+                const messageId = messageElement.dataset.messageId;
+                const sender = messageElement.dataset.sender;
+                
+                const messageData = messages.find(m => m.id === messageId);
+                if (!messageData) return;
+                
+                // Get profile data
+                const profile = await window.getUserProfile(sender);
+                
+                // Update sender styling
+                const senderElement = messageElement.querySelector('.sender');
+                if (senderElement && profile) {
+                    senderElement.style.color = profile.color;
+                    if (profile.isVIP) {
+                        senderElement.classList.add('vip-user');
+                    }
+                }
+                
+                // Add profile image
+                if (profile.image) {
+                    const messageHeader = messageElement.querySelector('.message-header');
+                    const profileImg = document.createElement('img');
+                    profileImg.src = profile.image;
+                    profileImg.alt = sender;
+                    profileImg.className = 'message-profile-img';
+                    messageHeader.insertBefore(profileImg, messageHeader.firstChild);
+                }
+                
+                // Add reply preview
+                if (messageData.reply_to_message_id) {
+                    const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
+                    if (replyPreviewHtml) {
+                        messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
+                    }
+                }
+                
+                // Add reaction arrow
+                if (window.addReactionArrowToMessage) {
+                    window.addReactionArrowToMessage(messageElement, messageId);
+                }
+            }));
+            
+            // Small delay between batches
+            if (i + batchSize < messageElements.length) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        }
+    } catch (error) {
+        console.error('❌ Error loading enhancements for message range:', error);
     }
 }
 
