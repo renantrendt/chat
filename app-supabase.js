@@ -719,20 +719,39 @@ async function displayMessageFast(message) {
     return messageElement;
 }
 
-// Load message enhancements after basic display (non-blocking)
+// Load message enhancements after basic display (non-blocking) - ULTRA FAST VERSION
 async function loadMessageEnhancements() {
-    console.log('🎨 Loading message enhancements...');
+    console.log('🎨 TURBO loading message enhancements...');
     
     try {
         // Get all message elements
         const messageElements = document.querySelectorAll('.message[data-message-id]');
         
-        // Process enhancements in batches to avoid blocking
-        const batchSize = 10;
+        // Step 1: Pre-load ALL profile data in parallel (SUPER FAST)
+        const uniqueSenders = [...new Set(Array.from(messageElements).map(el => el.dataset.sender))];
+        console.log(`👥 Pre-loading profiles for ${uniqueSenders.length} users...`);
+        
+        const profilePromises = uniqueSenders.map(sender => window.getUserProfile(sender));
+        const profilesArray = await Promise.all(profilePromises);
+        
+        // Create profile cache for instant access
+        const profileCache = {};
+        uniqueSenders.forEach((sender, index) => {
+            profileCache[sender] = profilesArray[index];
+        });
+        
+        console.log('✅ All profiles cached, now applying enhancements...');
+        
+        // Step 2: Apply ALL enhancements in massive parallel batches (NO delays)
+        const batchSize = 50; // MUCH bigger batches
+        const batches = [];
+        
         for (let i = 0; i < messageElements.length; i += batchSize) {
-            const batch = Array.from(messageElements).slice(i, i + batchSize);
-            
-            // Process batch in parallel
+            batches.push(Array.from(messageElements).slice(i, i + batchSize));
+        }
+        
+        // Process ALL batches simultaneously
+        await Promise.all(batches.map(async (batch) => {
             await Promise.all(batch.map(async (messageElement) => {
                 const messageId = messageElement.dataset.messageId;
                 const sender = messageElement.dataset.sender;
@@ -741,12 +760,13 @@ async function loadMessageEnhancements() {
                 const messageData = messages.find(m => m.id === messageId);
                 if (!messageData) return;
                 
-                // Get profile data
-                const profile = await window.getUserProfile(sender);
+                // Get profile from cache (INSTANT)
+                const profile = profileCache[sender];
+                if (!profile) return;
                 
                 // Update sender styling with profile data
                 const senderElement = messageElement.querySelector('.sender');
-                if (senderElement && profile) {
+                if (senderElement) {
                     senderElement.style.color = profile.color;
                     if (profile.isVIP) {
                         senderElement.classList.add('vip-user');
@@ -763,15 +783,7 @@ async function loadMessageEnhancements() {
                     messageHeader.insertBefore(profileImg, messageHeader.firstChild);
                 }
                 
-                // Add reply preview if this is a reply
-                if (messageData.reply_to_message_id) {
-                    const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
-                    if (replyPreviewHtml) {
-                        messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
-                    }
-                }
-                
-                // Add reaction arrow
+                // Add reaction arrow immediately
                 if (window.addReactionArrowToMessage) {
                     window.addReactionArrowToMessage(messageElement, messageId);
                 }
@@ -781,21 +793,38 @@ async function loadMessageEnhancements() {
                     window.addMessageStatus(messageElement, messageData.status);
                 }
             }));
-            
-            // Small delay between batches to keep UI responsive
-            if (i + batchSize < messageElements.length) {
-                await new Promise(resolve => setTimeout(resolve, 50));
+        }));
+        
+        console.log('✅ Core enhancements applied FAST!');
+        
+        // Step 3: Load reply previews separately (they can be slower)
+        setTimeout(async () => {
+            const replyMessages = messages.filter(m => m.reply_to_message_id);
+            if (replyMessages.length > 0) {
+                console.log(`💬 Loading ${replyMessages.length} reply previews...`);
+                
+                await Promise.all(replyMessages.map(async (messageData) => {
+                    const messageElement = document.querySelector(`[data-message-id="${messageData.id}"]`);
+                    if (messageElement && messageData.reply_to_message_id) {
+                        const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
+                        if (replyPreviewHtml) {
+                            messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
+                        }
+                    }
+                }));
+                
+                console.log('✅ Reply previews loaded');
             }
-        }
+        }, 50);
         
-        // Load reactions for all messages (last, as it's least important)
-        if (window.loadAllReactions) {
-            setTimeout(() => {
+        // Step 4: Load reactions last (least important)
+        setTimeout(() => {
+            if (window.loadAllReactions) {
                 window.loadAllReactions();
-            }, 200);
-        }
+            }
+        }, 100);
         
-        console.log('✅ Message enhancements loaded');
+        console.log('🚀 TURBO message enhancements completed!');
         
     } catch (error) {
         console.error('❌ Error loading message enhancements:', error);
@@ -937,64 +966,82 @@ window.loadMoreMessages = async function(roomCode) {
     }
 };
 
-// Load enhancements for a specific range of messages
+// Load enhancements for a specific range of messages - TURBO VERSION
 async function loadMessageEnhancementsForRange(startIndex, count) {
     try {
         const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]')).slice(startIndex, startIndex + count);
         
-        // Process in smaller batches for older messages
-        const batchSize = 5;
-        for (let i = 0; i < messageElements.length; i += batchSize) {
-            const batch = messageElements.slice(i, i + batchSize);
+        console.log(`🚀 TURBO enhancing ${messageElements.length} older messages...`);
+        
+        // Pre-load all profile data for this range in parallel
+        const uniqueSenders = [...new Set(messageElements.map(el => el.dataset.sender))];
+        const profilePromises = uniqueSenders.map(sender => window.getUserProfile(sender));
+        const profilesArray = await Promise.all(profilePromises);
+        
+        // Create profile cache
+        const profileCache = {};
+        uniqueSenders.forEach((sender, index) => {
+            profileCache[sender] = profilesArray[index];
+        });
+        
+        // Apply ALL enhancements in parallel (NO batching delays)
+        await Promise.all(messageElements.map(async (messageElement) => {
+            const messageId = messageElement.dataset.messageId;
+            const sender = messageElement.dataset.sender;
             
-            await Promise.all(batch.map(async (messageElement) => {
-                const messageId = messageElement.dataset.messageId;
-                const sender = messageElement.dataset.sender;
-                
-                const messageData = messages.find(m => m.id === messageId);
-                if (!messageData) return;
-                
-                // Get profile data
-                const profile = await window.getUserProfile(sender);
-                
-                // Update sender styling
-                const senderElement = messageElement.querySelector('.sender');
-                if (senderElement && profile) {
-                    senderElement.style.color = profile.color;
-                    if (profile.isVIP) {
-                        senderElement.classList.add('vip-user');
-                    }
-                }
-                
-                // Add profile image
-                if (profile.image) {
-                    const messageHeader = messageElement.querySelector('.message-header');
-                    const profileImg = document.createElement('img');
-                    profileImg.src = profile.image;
-                    profileImg.alt = sender;
-                    profileImg.className = 'message-profile-img';
-                    messageHeader.insertBefore(profileImg, messageHeader.firstChild);
-                }
-                
-                // Add reply preview
-                if (messageData.reply_to_message_id) {
-                    const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
-                    if (replyPreviewHtml) {
-                        messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
-                    }
-                }
-                
-                // Add reaction arrow
-                if (window.addReactionArrowToMessage) {
-                    window.addReactionArrowToMessage(messageElement, messageId);
-                }
-            }));
+            const messageData = messages.find(m => m.id === messageId);
+            if (!messageData) return;
             
-            // Small delay between batches
-            if (i + batchSize < messageElements.length) {
-                await new Promise(resolve => setTimeout(resolve, 50));
+            // Get profile from cache (INSTANT)
+            const profile = profileCache[sender];
+            if (!profile) return;
+            
+            // Update sender styling
+            const senderElement = messageElement.querySelector('.sender');
+            if (senderElement) {
+                senderElement.style.color = profile.color;
+                if (profile.isVIP) {
+                    senderElement.classList.add('vip-user');
+                }
             }
-        }
+            
+            // Add profile image
+            if (profile.image) {
+                const messageHeader = messageElement.querySelector('.message-header');
+                const profileImg = document.createElement('img');
+                profileImg.src = profile.image;
+                profileImg.alt = sender;
+                profileImg.className = 'message-profile-img';
+                messageHeader.insertBefore(profileImg, messageHeader.firstChild);
+            }
+            
+            // Add reaction arrow
+            if (window.addReactionArrowToMessage) {
+                window.addReactionArrowToMessage(messageElement, messageId);
+            }
+        }));
+        
+        // Load reply previews separately (can be slower)
+        setTimeout(async () => {
+            const replyMessages = messageElements
+                .map(el => messages.find(m => m.id === el.dataset.messageId))
+                .filter(m => m && m.reply_to_message_id);
+            
+            if (replyMessages.length > 0) {
+                await Promise.all(replyMessages.map(async (messageData) => {
+                    const messageElement = document.querySelector(`[data-message-id="${messageData.id}"]`);
+                    if (messageElement && messageData.reply_to_message_id) {
+                        const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
+                        if (replyPreviewHtml) {
+                            messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
+                        }
+                    }
+                }));
+            }
+        }, 50);
+        
+        console.log('✅ TURBO older message enhancements completed!');
+        
     } catch (error) {
         console.error('❌ Error loading enhancements for message range:', error);
     }
