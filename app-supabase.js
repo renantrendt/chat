@@ -540,6 +540,11 @@ async function leaveRoom() {
             if (window.closeEmojiPicker) {
                 window.closeEmojiPicker();
             }
+            
+            // Clean up delete system
+            if (window.cleanupDeleteSystem) {
+                window.cleanupDeleteSystem();
+            }
         } catch (error) {
             console.error('Error cleaning up UI elements:', error);
         }
@@ -702,6 +707,11 @@ async function displayMessageFast(message) {
     // Format timestamp
     const timestamp = formatMessageTime(message.timestamp);
     
+    // Check if message was deleted
+    const isDeleted = message.was_deleted || message.content === 'This message was deleted';
+    const contentText = isDeleted ? 'This message was deleted' : message.content;
+    const contentStyle = isDeleted ? 'color: #ff4444; font-style: italic;' : '';
+    
     // Create basic message content first (fast)
     messageElement.innerHTML = `
         <div class="message-header">
@@ -710,8 +720,13 @@ async function displayMessageFast(message) {
                 <div class="sender" style="color: #ffffff">${message.sender}</div>
             </div>
         </div>
-        <div class="content">${message.content}</div>
+        <div class="content" style="${contentStyle}">${contentText}</div>
     `;
+    
+    // Add deleted class if needed
+    if (isDeleted) {
+        messageElement.classList.add('deleted');
+    }
     
     // Add to container immediately
     messagesContainer.appendChild(messageElement);
@@ -788,9 +803,19 @@ async function loadMessageEnhancements() {
                     window.addReactionArrowToMessage(messageElement, messageId);
                 }
                 
-                // Add message status for sent messages
-                if (messageData.sender === currentUser && messageData.status && window.addMessageStatus) {
-                    window.addMessageStatus(messageElement, messageData.status);
+                // Don't add enhancements to deleted messages
+                const isDeleted = messageData.was_deleted || messageData.content === 'This message was deleted';
+                
+                if (!isDeleted) {
+                    // Add delete trash can for own recent messages
+                    if (window.addDeleteTrashCan && messageData.sender === currentUser) {
+                        window.addDeleteTrashCan(messageElement, messageData);
+                    }
+                    
+                    // Add message status for sent messages
+                    if (messageData.sender === currentUser && messageData.status && window.addMessageStatus) {
+                        window.addMessageStatus(messageElement, messageData.status);
+                    }
                 }
             }));
         }));
@@ -1019,6 +1044,16 @@ async function loadMessageEnhancementsForRange(startIndex, count) {
             if (window.addReactionArrowToMessage) {
                 window.addReactionArrowToMessage(messageElement, messageId);
             }
+            
+            // Don't add enhancements to deleted messages
+            const isDeleted = messageData.was_deleted || messageData.content === 'This message was deleted';
+            
+            if (!isDeleted) {
+                // Add delete trash can for own recent messages
+                if (window.addDeleteTrashCan && messageData.sender === currentUser) {
+                    window.addDeleteTrashCan(messageElement, messageData);
+                }
+            }
         }));
         
         // Load reply previews separately (can be slower)
@@ -1162,7 +1197,15 @@ async function createReplyPreviewForMessage(originalMessageId) {
             console.warn('❌ Could not find original message:', originalMessageId);
             return `<div class="message-reply-preview deleted">
                 <span class="reply-icon">↩️</span>
-                <span class="original-message-deleted">Original message deleted</span>
+                <span class="original-message-deleted" style="color: #ff4444; font-style: italic;">This message was deleted</span>
+            </div>`;
+        }
+        
+        // Check if the message is marked as deleted
+        if (originalMessage.was_deleted || originalMessage.content === 'This message was deleted') {
+            return `<div class="message-reply-preview deleted">
+                <span class="reply-icon">↩️</span>
+                <span class="original-message-deleted" style="color: #ff4444; font-style: italic;">This message was deleted</span>
             </div>`;
         }
         
@@ -1219,6 +1262,11 @@ async function displayMessage(message) {
     // Add VIP class if user is VIP
     const vipClass = profile.isVIP ? 'vip-user' : '';
     
+    // Check if message was deleted
+    const isDeleted = message.was_deleted || message.content === 'This message was deleted';
+    const contentText = isDeleted ? 'This message was deleted' : message.content;
+    const contentStyle = isDeleted ? 'color: #ff4444; font-style: italic;' : '';
+
     // Check if this is a reply message and create reply preview
     let replyPreviewHtml = '';
     if (message.reply_to_message_id) {
@@ -1235,8 +1283,13 @@ async function displayMessage(message) {
                 <div class="sender ${vipClass}" style="color: ${profile.color}">${message.sender}</div>
             </div>
         </div>
-        <div class="content">${message.content}</div>
+        <div class="content" style="${contentStyle}">${contentText}</div>
     `;
+    
+    // Add deleted class if needed
+    if (isDeleted) {
+        messageElement.classList.add('deleted');
+    }
     
     // Add status for sent messages
     if (message.sender === currentUser && message.status && window.addMessageStatus) {
@@ -1258,6 +1311,11 @@ async function displayMessage(message) {
         window.addReactionArrowToMessage(messageElement, message.id);
     } else {
         console.warn('window.addReactionArrowToMessage is not available');
+    }
+    
+    // Add delete trash can for own recent messages (only if not deleted)
+    if (!isDeleted && window.addDeleteTrashCan && message.sender === currentUser) {
+        window.addDeleteTrashCan(messageElement, message);
     }
     
     // Observe this message for read status (if not sent by current user)
