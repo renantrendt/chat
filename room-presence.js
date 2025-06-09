@@ -255,8 +255,8 @@ async function showUserJoinNotification(username) {
     // Show the notification
     notification.classList.add('show');
     
-    // Hide after appropriate time (12 seconds for VIP, 8 for regular)
-    const displayTime = isVIP ? 12000 : 8000;
+    // Hide after appropriate time (8 seconds for VIP, 8 for regular)
+    const displayTime = isVIP ? 8000 : 8000;
     setTimeout(() => {
         notification.classList.remove('show');
         if (isVIP) {
@@ -288,8 +288,8 @@ async function showUserLeaveNotification(username) {
     // Show the notification
     notification.classList.add('show');
     
-    // Hide after appropriate time (12 seconds for VIP, 8 for regular)
-    const displayTime = isVIP ? 12000 : 8000;
+    // Hide after appropriate time (8 seconds for VIP, 8 for regular)
+    const displayTime = isVIP ? 8000 : 8000;
     setTimeout(() => {
         notification.classList.remove('show');
         if (isVIP) {

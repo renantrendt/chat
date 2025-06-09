@@ -710,6 +710,12 @@ async function sendMessage(content) {
             status: 'sent' // Add default status
         };
         
+        // Add reply_to_message_id if in reply mode
+        if (window.currentReplyMessageId) {
+            message.reply_to_message_id = window.currentReplyMessageId;
+            console.log('💬 Sending reply to message:', window.currentReplyMessageId);
+        }
+        
         console.log('Sending message:', message);
         
         // Insert into Supabase
@@ -721,6 +727,17 @@ async function sendMessage(content) {
         if (error) throw error;
         
         console.log('Message sent successfully:', data);
+        
+        // Clear reply state after sending
+        if (window.currentReplyMessageId) {
+            console.log('🧹 Clearing reply state after sending');
+            if (window.hideReplyPreview) {
+                window.hideReplyPreview();
+            }
+            if (window.cancelReply) {
+                window.cancelReply();
+            }
+        }
         
         // Let the real-time subscription handle displaying the message
         // This ensures proper chronological ordering and prevents duplicates
@@ -736,6 +753,47 @@ async function sendMessage(content) {
     } catch (error) {
         console.error('Error sending message:', error);
         alert('Failed to send message. Please try again.');
+    }
+}
+
+// Create reply preview HTML for a message
+async function createReplyPreviewForMessage(originalMessageId) {
+    try {
+        console.log('📄 Creating reply preview for original message:', originalMessageId);
+        
+        // Try to get original message from database
+        const { data: originalMessage, error } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .eq('id', originalMessageId)
+            .single();
+        
+        if (error || !originalMessage) {
+            console.warn('❌ Could not find original message:', originalMessageId);
+            return `<div class="message-reply-preview deleted">
+                <span class="reply-icon">↩️</span>
+                <span class="original-message-deleted">Original message deleted</span>
+            </div>`;
+        }
+        
+        // Truncate content for preview
+        const truncatedContent = window.truncateMessageForPreview ? 
+            window.truncateMessageForPreview(originalMessage.content) : 
+            originalMessage.content.substring(0, 80) + '...';
+        
+        console.log('✅ Created reply preview for:', originalMessage.sender);
+        
+        return `<div class="message-reply-preview" onclick="scrollToMessage('${originalMessageId}')">
+            <span class="reply-icon">↩️</span>
+            <div class="original-message-info">
+                <span class="original-sender">${originalMessage.sender}</span>
+                <span class="original-content">${truncatedContent}</span>
+            </div>
+        </div>`;
+        
+    } catch (error) {
+        console.error('❌ Error creating reply preview:', error);
+        return '';
     }
 }
 
@@ -771,8 +829,15 @@ async function displayMessage(message) {
     // Add VIP class if user is VIP
     const vipClass = profile.isVIP ? 'vip-user' : '';
     
+    // Check if this is a reply message and create reply preview
+    let replyPreviewHtml = '';
+    if (message.reply_to_message_id) {
+        replyPreviewHtml = await createReplyPreviewForMessage(message.reply_to_message_id);
+    }
+    
     // Create message content with timestamp
     messageElement.innerHTML = `
+        ${replyPreviewHtml}
         <div class="message-header">
             ${profileImageHtml}
             <div class="message-info">
@@ -1016,6 +1081,144 @@ function formatVisitedTime(timestamp) {
         return visitedDate.toLocaleDateString(undefined, options);
     }
 }
+
+// Scroll to message functionality
+function scrollToMessage(messageId) {
+    console.log('🎯 Scrolling to message:', messageId);
+    
+    try {
+        // Find the message element
+        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+        
+        if (!messageElement) {
+            console.warn('❌ Message not found in current view:', messageId);
+            showScrollFeedback('Message not visible in current view', 'warning');
+            return;
+        }
+        
+        // Smooth scroll to message
+        messageElement.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+            inline: 'nearest'
+        });
+        
+        // Highlight the message after scrolling
+        setTimeout(() => {
+            highlightMessage(messageElement);
+        }, 500); // Delay to let scroll animation finish
+        
+        console.log('✅ Scrolled to message successfully');
+        
+    } catch (error) {
+        console.error('❌ Error scrolling to message:', error);
+        showScrollFeedback('Error finding message', 'error');
+    }
+}
+
+// Highlight a message with animation
+function highlightMessage(messageElement) {
+    if (!messageElement) return;
+    
+    console.log('✨ Highlighting message');
+    
+    // Add highlight class
+    messageElement.classList.add('message-highlight');
+    
+    // Remove highlight class after animation
+    setTimeout(() => {
+        messageElement.classList.remove('message-highlight');
+        console.log('✅ Message highlight removed');
+    }, 2000); // Match animation duration
+}
+
+// Show feedback for scroll actions
+function showScrollFeedback(message, type = 'info') {
+    console.log(`📢 ${type.toUpperCase()}: ${message}`);
+    
+    // Create feedback element
+    const feedback = document.createElement('div');
+    feedback.className = `scroll-feedback scroll-feedback-${type}`;
+    feedback.textContent = message;
+    
+    // Style the feedback
+    feedback.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: ${type === 'error' ? '#dc3545' : type === 'warning' ? '#ffc107' : '#57a85a'};
+        color: white;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        z-index: 10000;
+        animation: feedbackSlide 3s ease-out forwards;
+    `;
+    
+    // Add CSS animation for feedback
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes feedbackSlide {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+            15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+        }
+    `;
+    
+    if (!document.querySelector('#scroll-feedback-styles')) {
+        style.id = 'scroll-feedback-styles';
+        document.head.appendChild(style);
+    }
+    
+    // Add to page
+    document.body.appendChild(feedback);
+    
+    // Remove after animation
+    setTimeout(() => {
+        if (feedback.parentNode) {
+            feedback.parentNode.removeChild(feedback);
+        }
+    }, 3000);
+}
+
+// Test function for scroll navigation
+function testScrollNavigation() {
+    console.log('🎯 Testing scroll navigation...');
+    
+    // Find all messages
+    const messageElements = document.querySelectorAll('.message[data-message-id]');
+    if (messageElements.length === 0) {
+        console.error('❌ No messages found to test with');
+        return;
+    }
+    
+    // Get a random message (but not the last one so we can see the scroll effect)
+    const randomIndex = Math.floor(Math.random() * Math.max(1, messageElements.length - 1));
+    const testMessage = messageElements[randomIndex];
+    const messageId = testMessage.dataset.messageId;
+    
+    console.log('📝 Testing scroll to message:', messageId);
+    
+    // Scroll to bottom first to make the effect more visible
+    const messagesContainer = document.getElementById('messages-container');
+    if (messagesContainer) {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    // Wait a moment, then scroll to the test message
+    setTimeout(() => {
+        scrollToMessage(messageId);
+        console.log('✅ Scroll navigation test initiated!');
+    }, 1000);
+}
+
+// Make functions globally available
+window.scrollToMessage = scrollToMessage;
+window.highlightMessage = highlightMessage;
+window.showScrollFeedback = showScrollFeedback;
+window.testScrollNavigation = testScrollNavigation;
 
 // Initialize the app when the DOM is loaded
 document.addEventListener('DOMContentLoaded', initApp);

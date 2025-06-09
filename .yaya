@@ -1,0 +1,96 @@
+Phase 2: Update Reaction Menu - Add "Reply" Button
+- [x] Modify message-reactions.js showReactionMenu() function
+- [x] Change popup from just "React" to "React | Reply" buttons  
+- [x] Add "reply-btn" class and click handler
+- [x] Style reply button with same theme as React button
+- [x] Position buttons side by side in popup
+
+Phase 3: Reply Input State - WhatsApp-like Reply UI
+- [x] Create reply preview component above message input
+- [x] Show format: "[Sender Name]: [Message text...]" in faded green box
+- [x] Add "Cancel Reply" X button to exit reply mode
+- [x] Truncate long messages with "..." when exceeds screen width
+- [x] Store reply state variables (replyToMessageId, replyToMessage)
+- [x] Style with erased/faded green theme as requested
+
+Phase 4: Message Display - Original Preview Above Replies  
+- [x] Modify app-supabase.js displayMessage() function
+- [x] Check if message has reply_to_message_id field
+- [x] If yes, show original message preview ABOVE the actual reply
+- [x] Format: Green box with "[Original Sender]: [Original text...]"
+- [ ] Add connecting line/visual indicator (like WhatsApp)
+- [x] Make preview clickable to jump to original message
+- [x] Handle truncation for long original messages
+
+Phase 5: Database Integration
+- [ ] Add reply_to_message_id field to existing messages table
+- [x] Store original message ID when sending replies
+- [x] Modify sendMessage() to include reply relationship
+- [x] Load original message data for display
+- [x] Handle cases where original message might be deleted
+
+Phase 6: Message Sending & State Management
+- [x] Update sendMessage() function to include reply_to_message_id
+- [x] Clear reply state after successful send
+- [x] Reset input area to normal mode
+- [x] Show reply preview in sent message immediately
+- [x] Handle errors gracefully (what if original msg deleted?)
+
+Phase 7: Scroll Navigation & UX
+- [x] Implement scroll-to-message functionality
+- [x] Highlight original message briefly when jumped to
+- [x] Smooth scrolling animation
+- [x] Handle edge cases (message not in current view)
+- [x] Add visual feedback for successful navigation
+
+
+## IMPLEMENTATION CHECKLIST:
+
+### Database & Backend:
+- [ ] Add reply_to_message_id column to messages table
+- [ ] Update sendMessage() to store reply relationships
+- [ ] Create function to fetch original message data
+- [ ] Handle deleted original message edge cases
+
+### UI Components:
+- [ ] Add "Reply" button to reaction popup
+- [ ] Create reply preview component (above input)
+- [ ] Style reply preview with green theme
+- [ ] Add cancel reply functionality
+- [ ] Create original message preview (above replies)
+- [ ] Implement text truncation with "..."
+
+### Event Handlers:
+- [ ] Reply button click handler
+- [ ] Cancel reply click handler  
+- [ ] Reply preview click handler (jump to original)
+- [ ] Update message sending logic
+
+### Visual Styling:
+- [ ] Green theme for reply elements
+- [ ] Connecting lines/visual indicators
+- [ ] Mobile responsive adjustments
+- [ ] Hover and active states
+- [ ] WhatsApp-like appearance
+
+### Navigation:
+- [ ] Scroll-to-message functionality
+- [ ] Message highlighting when jumped to
+- [ ] Smooth scrolling animations
+- [ ] Handle off-screen messages
+
+### Integration:
+- [ ] Integrate with existing reaction system
+- [ ] Maintain message chronological order
+- [ ] Preserve existing message display logic
+- [ ] Test with real-time message updates
+
+### Testing:
+- [ ] Test reply creation flow
+- [ ] Test reply display rendering
+- [ ] Test scroll navigation
+- [ ] Test edge cases (long messages, deleted originals)
+- [ ] Test mobile experience
+- [ ] Test multi-user scenarios
+
+TOTAL ESTIMATED TASKS: 25 items to complete WhatsApp-like reply system

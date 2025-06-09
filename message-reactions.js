@@ -118,9 +118,9 @@ function setupReactionEventListeners() {
     cleanupReactionEventListeners();
     
     // Always use document-level delegation since reaction menus are added to body
-    reactionEventHandler = handleReactionClicksWithValidation;
-    reactionEventTarget = document;
-    document.addEventListener('click', reactionEventHandler);
+        reactionEventHandler = handleReactionClicksWithValidation;
+        reactionEventTarget = document;
+        document.addEventListener('click', reactionEventHandler);
     console.log('Reaction system: Event delegation set up on document (to handle popups)');
 }
 
@@ -146,6 +146,21 @@ function handleReactionClicks(e) {
             return;
         }
         
+        // Handle reply button clicks
+        if (e.target.classList.contains('reply-btn')) {
+            e.preventDefault();
+            console.log('💬 Reply button clicked - entering reply mode');
+            
+            const messageId = e.target.dataset.messageId;
+            if (messageId) {
+                enterReplyMode(messageId);
+                hideReactionMenu();
+            } else {
+                console.warn('❌ Could not find message ID for reply');
+            }
+            return;
+        }
+        
         // Handle predefined emoji clicks
         if (e.target.classList.contains('predefined-emoji')) {
             e.preventDefault();
@@ -162,7 +177,7 @@ function handleReactionClicks(e) {
                 console.log('Found messageId from menu:', messageId);
             } else {
                 // Fallback: try to find from closest message
-                const messageElement = e.target.closest('.message');
+            const messageElement = e.target.closest('.message');
                 if (messageElement && messageElement.dataset.messageId) {
                     messageId = messageElement.dataset.messageId;
                     console.log('Found messageId from message element:', messageId);
@@ -194,7 +209,7 @@ function handleReactionClicks(e) {
                 console.log('📝 Found messageId from menu:', messageId);
             } else {
                 // Fallback: try to find from closest message
-                const messageElement = e.target.closest('.message');
+            const messageElement = e.target.closest('.message');
                 if (messageElement && messageElement.dataset.messageId) {
                     messageId = messageElement.dataset.messageId;
                     console.log('📝 Found messageId from message element:', messageId);
@@ -289,7 +304,10 @@ function showReactionMenu(arrow) {
         menu.dataset.messageId = message.dataset.messageId;
         
         menu.innerHTML = `
-            <button class="react-btn" data-message-id="${message.dataset.messageId}">React</button>
+            <div class="menu-buttons">
+                <button class="react-btn" data-message-id="${message.dataset.messageId}">React</button>
+                <button class="reply-btn" data-message-id="${message.dataset.messageId}">Reply</button>
+            </div>
         `;
         
         // Position the menu with better placement
@@ -420,7 +438,7 @@ function closeEmojiPicker() {
     console.log('❌ Closing emoji picker modal');
     
     if (emojiPickerModal) {
-        emojiPickerModal.style.display = 'none';
+    emojiPickerModal.style.display = 'none';
     }
     
     currentReactionMessageId = null;
@@ -971,6 +989,186 @@ function testEmojiPicker() {
     console.log('✅ Emoji picker test initiated. The modal should be visible now!');
 }
 
+// Global reply state variables
+let currentReplyMessageId = null;
+let currentReplyMessage = null;
+
+// Enter reply mode (Phase 3 implementation)
+async function enterReplyMode(messageId) {
+    console.log('💬 Entering reply mode for message:', messageId);
+    
+    try {
+        // Get the original message data
+        const originalMessage = await getMessageById(messageId);
+        if (!originalMessage) {
+            console.error('❌ Could not find original message');
+            return;
+        }
+        
+        console.log('📄 Original message:', originalMessage);
+        
+        // Store reply state
+        currentReplyMessageId = messageId;
+        currentReplyMessage = originalMessage;
+        window.currentReplyMessageId = messageId;
+        
+        // Create and show reply preview
+        showReplyPreview(originalMessage);
+        
+        // Focus message input
+        const messageInput = document.getElementById('message-input');
+        if (messageInput) {
+            messageInput.focus();
+        }
+        
+        console.log('✅ Reply mode activated successfully');
+        
+    } catch (error) {
+        console.error('❌ Error entering reply mode:', error);
+    }
+}
+
+// Get message by ID from DOM or database
+async function getMessageById(messageId) {
+    // First try to find it in the current DOM
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageElement) {
+        const sender = messageElement.querySelector('.sender')?.textContent;
+        const content = messageElement.querySelector('.content')?.textContent;
+        
+        if (sender && content) {
+            return {
+                id: messageId,
+                sender: sender,
+                content: content
+            };
+        }
+    }
+    
+    // If not in DOM, fetch from database
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .eq('id', messageId)
+            .single();
+        
+        if (error) throw error;
+        return data;
+        
+    } catch (error) {
+        console.error('❌ Error fetching message from database:', error);
+        return null;
+    }
+}
+
+// Show reply preview above input
+function showReplyPreview(originalMessage) {
+    console.log('🖼️ Showing reply preview for:', originalMessage);
+    
+    // Remove any existing preview
+    hideReplyPreview();
+    
+    // Create reply preview container
+    const replyPreview = document.createElement('div');
+    replyPreview.className = 'reply-preview';
+    replyPreview.id = 'reply-preview';
+    
+    // Truncate message content based on screen width
+    const displayContent = truncateMessageForPreview(originalMessage.content);
+    
+    replyPreview.innerHTML = `
+        <div class="reply-preview-content">
+            <div class="reply-preview-header">
+                <span class="reply-icon">↩️</span>
+                <span class="reply-text">Replying to <strong>${originalMessage.sender}</strong></span>
+                <button class="cancel-reply-btn" title="Cancel reply">✕</button>
+            </div>
+            <div class="reply-preview-message">${displayContent}</div>
+        </div>
+    `;
+    
+    // Find the message input container and insert preview above it
+    const messageInputContainer = document.querySelector('.message-input-container');
+    if (messageInputContainer) {
+        messageInputContainer.parentNode.insertBefore(replyPreview, messageInputContainer);
+        console.log('✅ Reply preview inserted above input');
+    } else {
+        console.error('❌ Could not find message input container');
+        return;
+    }
+    
+    // Add cancel button event listener
+    const cancelBtn = replyPreview.querySelector('.cancel-reply-btn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', cancelReply);
+    }
+}
+
+// Hide/remove reply preview
+function hideReplyPreview() {
+    const existingPreview = document.getElementById('reply-preview');
+    if (existingPreview) {
+        existingPreview.remove();
+        console.log('🗑️ Reply preview removed');
+    }
+}
+
+// Cancel reply mode
+function cancelReply() {
+    console.log('❌ Canceling reply mode');
+    
+    // Clear reply state
+    currentReplyMessageId = null;
+    currentReplyMessage = null;
+    window.currentReplyMessageId = null;
+    
+    // Hide preview
+    hideReplyPreview();
+    
+    console.log('✅ Reply mode canceled');
+}
+
+// Truncate message content based on screen width
+function truncateMessageForPreview(content) {
+    const screenWidth = window.innerWidth;
+    let maxLength;
+    
+    // Adjust max length based on screen size
+    if (screenWidth <= 480) {
+        maxLength = 60; // Mobile phones
+    } else if (screenWidth <= 768) {
+        maxLength = 80; // Tablets
+    } else {
+        maxLength = 120; // Desktop
+    }
+    
+    if (content.length > maxLength) {
+        return content.substring(0, maxLength) + '...';
+    }
+    return content;
+}
+
+// Test function for reply system
+function testReplySystem() {
+    console.log('💬 Testing reply system...');
+    
+    // Find a message to test with
+    const messageElement = document.querySelector('.message');
+    if (!messageElement || !messageElement.dataset.messageId) {
+        console.error('❌ No message with ID found to test with');
+        return;
+    }
+    
+    const messageId = messageElement.dataset.messageId;
+    console.log('📝 Using message ID:', messageId);
+    
+    // Enter reply mode
+    enterReplyMode(messageId);
+    
+    console.log('✅ Reply system test initiated. Reply preview should appear above input!');
+}
+
 // Make functions available globally
 window.initReactionSystem = initReactionSystem;
 window.addReactionArrowToMessage = addReactionArrowToMessage;
@@ -983,10 +1181,17 @@ window.validateReactionSystem = validateReactionSystem;
 window.cleanupReactionEventListeners = cleanupReactionEventListeners;
 window.testReactionPopup = testReactionPopup;
 window.testEmojiPicker = testEmojiPicker;
+window.testReplySystem = testReplySystem;
+window.enterReplyMode = enterReplyMode;
+window.getMessageById = getMessageById;
+window.showReplyPreview = showReplyPreview;
+window.hideReplyPreview = hideReplyPreview;
+window.cancelReply = cancelReply;
+window.truncateMessageForPreview = truncateMessageForPreview;
 
 // Initialize when DOM is ready - handle different loading states
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initReactionSystem);
+document.addEventListener('DOMContentLoaded', initReactionSystem); 
 } else {
     // DOM already loaded, initialize immediately
     initReactionSystem();
