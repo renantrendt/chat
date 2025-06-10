@@ -280,23 +280,91 @@ body {
 .message-input-container {
     display: flex;
     width: 100%;
+    gap: 5px;
+}
+
+#image-upload-btn {
+    background-color: #7289da;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    padding: 12px 15px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.2s;
+}
+
+#image-upload-btn:hover {
+    background-color: #677bc4;
+}
+
+.input-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #40444b;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.image-preview-container {
+    position: relative;
+    padding: 10px;
+    border-bottom: 1px solid #36393f;
+    background-color: #36393f;
+}
+
+.image-preview {
+    max-width: 200px;
+    max-height: 150px;
+    border-radius: 4px;
+    display: block;
+}
+
+.remove-image-preview-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: rgba(244, 67, 54, 0.8);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 25px;
+    height: 25px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: background-color 0.2s;
+}
+
+.remove-image-preview-btn:hover {
+    background-color: rgba(244, 67, 54, 1);
+    transform: scale(1.1);
 }
 
 #message-input {
     flex-grow: 1;
     padding: 12px;
-    border-radius: 5px 0 0 5px;
     border: none;
-    background-color: #40444b;
+    background-color: transparent;
     color: #ffffff;
     font-size: 16px;
+    outline: none;
+}
+
+#message-input::placeholder {
+    color: #a3a6aa;
 }
 
 #send-message-btn {
     background-color: #43b581;
     color: white;
     border: none;
-    border-radius: 0 5px 5px 0;
+    border-radius: 5px;
     padding: 0 15px;
     cursor: pointer;
     font-size: 16px;
@@ -304,6 +372,40 @@ body {
 
 #send-message-btn:hover {
     background-color: #3ca374;
+}
+
+/* Drag and drop styles */
+.input-area.drag-over {
+    border: 2px dashed #7289da;
+    background-color: rgba(114, 137, 218, 0.1);
+}
+
+/* Message image styles */
+.message-image {
+    max-width: 300px;
+    max-height: 400px;
+    border-radius: 8px;
+    margin-top: 8px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.message-image:hover {
+    transform: scale(1.02);
+}
+
+.message-content-with-image {
+    display: flex;
+    flex-direction: column;
+}
+
+.message-text-content {
+    margin-bottom: 8px;
+}
+
+.message-image-container {
+    position: relative;
+    display: inline-block;
 }
 
 #save-conversation-btn {

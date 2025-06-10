@@ -201,7 +201,15 @@
             <div class="chat-container">
                 <div id="messages-container" class="messages-container"></div>
                 <div class="message-input-container">
-                    <input type="text" id="message-input" placeholder="Type a message...">
+                    <button id="image-upload-btn" title="Upload Image">📷</button>
+                    <input type="file" id="image-file-input" accept="image/png,image/jpg,image/jpeg,image/gif" style="display: none;">
+                    <div class="input-area">
+                        <div id="image-preview-container" class="image-preview-container" style="display: none;">
+                            <img id="image-preview" class="image-preview" src="" alt="Image preview">
+                            <button id="remove-image-btn" class="remove-image-preview-btn">×</button>
+                        </div>
+                        <input type="text" id="message-input" placeholder="Type a message...">
+                    </div>
                     <button id="send-message-btn">Enter</button>
                 </div>
             </div>

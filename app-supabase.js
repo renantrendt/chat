@@ -25,6 +25,14 @@ const sendMessageBtn = document.getElementById('send-message-btn');
 const saveConversationBtn = document.getElementById('save-conversation-btn');
 const connectionStatus = document.getElementById('connection-status');
 
+// Image upload elements
+const imageUploadBtn = document.getElementById('image-upload-btn');
+const imageFileInput = document.getElementById('image-file-input');
+const imagePreviewContainer = document.getElementById('image-preview-container');
+const imagePreview = document.getElementById('image-preview');
+const removeImageBtn = document.getElementById('remove-image-btn');
+const inputArea = document.querySelector('.input-area');
+
 // Last visited rooms elements
 const lastVisitedSection = document.getElementById('last-visited-section');
 const lastVisitedRooms = document.getElementById('last-visited-rooms');
@@ -35,6 +43,7 @@ let currentUser = null;
 let currentRoom = null;
 let messages = [];
 let messageSubscription = null;
+let selectedImageFile = null;
 
 // Local Storage Keys
 const USERNAME_KEY = 'msg_username';
@@ -271,7 +280,7 @@ function addEventListeners() {
     
     // Chat functionality
     messageInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value.trim() !== '') {
+        if (e.key === 'Enter' && (this.value.trim() !== '' || selectedImageFile)) {
             sendMessage(this.value.trim());
             this.value = '';
         }
@@ -279,7 +288,7 @@ function addEventListeners() {
     
     // Send message button functionality
     sendMessageBtn.addEventListener('click', function() {
-        if (messageInput.value.trim() !== '') {
+        if (messageInput.value.trim() !== '' || selectedImageFile) {
             sendMessage(messageInput.value.trim());
             messageInput.value = '';
             messageInput.focus();
@@ -287,6 +296,35 @@ function addEventListeners() {
     });
     
     saveConversationBtn.addEventListener('click', saveConversation);
+
+    // Image upload functionality
+    imageUploadBtn.addEventListener('click', () => {
+        imageFileInput.click();
+    });
+
+    imageFileInput.addEventListener('change', handleImageSelect);
+    
+    // Debug and fix the X button
+    console.log('removeImageBtn element:', removeImageBtn);
+    if (removeImageBtn) {
+        removeImageBtn.addEventListener('click', clearImagePreview);
+        console.log('✅ X button event listener attached');
+    } else {
+        console.error('❌ removeImageBtn element not found!');
+    }
+
+    // Drag and drop functionality
+    inputArea.addEventListener('dragover', handleDragOver);
+    inputArea.addEventListener('dragleave', handleDragLeave);
+    inputArea.addEventListener('drop', handleImageDrop);
+    
+    // Alternative X button handler using event delegation (backup method)
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'remove-image-btn') {
+            console.log('🗑️ X button clicked via event delegation');
+            clearImagePreview();
+        }
+    });
 }
 
 // Username Functions
@@ -712,6 +750,37 @@ async function displayMessageFast(message) {
     const contentText = isDeleted ? 'This message was deleted' : message.content;
     const contentStyle = isDeleted ? 'color: #ff4444; font-style: italic;' : '';
     
+    // Handle image content (fast)
+    const hasImage = message.image_url && !isDeleted;
+    const hasText = contentText && contentText.trim() !== '';
+    
+    let imageHtml = '';
+    if (hasImage) {
+        imageHtml = `
+            <div class="message-image-container">
+                <img src="${message.image_url}" alt="Shared image" class="message-image" onclick="openImageFullscreen('${message.image_url}')">
+            </div>
+        `;
+    }
+    
+    // Create content HTML based on what's available
+    let contentHtml = '';
+    if (hasText && hasImage) {
+        // Both text and image
+        contentHtml = `
+            <div class="message-content-with-image">
+                <div class="message-text-content" style="${contentStyle}">${contentText}</div>
+                ${imageHtml}
+            </div>
+        `;
+    } else if (hasImage) {
+        // Image only
+        contentHtml = imageHtml;
+    } else {
+        // Text only (or deleted message)
+        contentHtml = `<div class="content" style="${contentStyle}">${contentText}</div>`;
+    }
+    
     // Create basic message content first (fast)
     messageElement.innerHTML = `
         <div class="message-header">
@@ -720,7 +789,7 @@ async function displayMessageFast(message) {
                 <div class="sender" style="color: #ffffff">${message.sender}</div>
             </div>
         </div>
-        <div class="content" style="${contentStyle}">${contentText}</div>
+        ${contentHtml}
     `;
     
     // Add deleted class if needed
@@ -1122,15 +1191,126 @@ function subscribeToMessages(roomCode) {
     subscriptionManager.register('messages', messageSubscription, 'message-updates');
 }
 
-async function sendMessage(content) {
-    if (!currentRoom || !currentUser || !content) return;
+// Image handling functions
+function handleImageSelect(event) {
+    const file = event.target.files[0];
+    if (file) {
+        if (validateImageFile(file)) {
+            displayImagePreview(file);
+            selectedImageFile = file;
+        }
+    }
+}
+
+function handleDragOver(event) {
+    event.preventDefault();
+    inputArea.classList.add('drag-over');
+}
+
+function handleDragLeave(event) {
+    event.preventDefault();
+    inputArea.classList.remove('drag-over');
+}
+
+function handleImageDrop(event) {
+    event.preventDefault();
+    inputArea.classList.remove('drag-over');
+    
+    const files = event.dataTransfer.files;
+    if (files.length > 0) {
+        const file = files[0];
+        if (validateImageFile(file)) {
+            displayImagePreview(file);
+            selectedImageFile = file;
+        }
+    }
+}
+
+function validateImageFile(file) {
+    // Check file type
+    const allowedTypes = ['image/png', 'image/jpg', 'image/jpeg', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+        alert('Please select a valid image file (PNG, JPG, or GIF)');
+        return false;
+    }
+    
+    // Check file size (8MB = 8 * 1024 * 1024 bytes)
+    const maxSize = 8 * 1024 * 1024;
+    if (file.size > maxSize) {
+        alert('Image size must be less than 8MB');
+        return false;
+    }
+    
+    return true;
+}
+
+function displayImagePreview(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        imagePreview.src = e.target.result;
+        imagePreviewContainer.style.display = 'block';
+        messageInput.placeholder = 'Add a caption (optional)...';
+    };
+    reader.readAsDataURL(file);
+}
+
+function clearImagePreview() {
+    console.log('🗑️ X button clicked - clearing image preview');
+    imagePreviewContainer.style.display = 'none';
+    imagePreview.src = '';
+    selectedImageFile = null;
+    imageFileInput.value = '';
+    messageInput.placeholder = 'Type a message...';
+    console.log('✅ Image preview cleared');
+}
+
+async function uploadImageToSupabase(file) {
+    if (!file) return null;
     
     try {
+        console.log('Converting image to base64:', file.name);
+        
+        // Convert image to base64 (same as profile system)
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                console.log('Image converted to base64 successfully');
+                resolve(e.target.result); // This is the base64 data URL
+            };
+            reader.onerror = function(error) {
+                console.error('Error converting image to base64:', error);
+                reject(error);
+            };
+            reader.readAsDataURL(file);
+        });
+        
+    } catch (error) {
+        console.error('Error processing image:', error);
+        alert('Failed to process image. Please try again.');
+        return null;
+    }
+}
+
+async function sendMessage(content) {
+    if (!currentRoom || !currentUser || (!content && !selectedImageFile)) return;
+    
+    try {
+        let imageUrl = null;
+        
+        // Convert image to base64 if selected
+        if (selectedImageFile) {
+            imageUrl = await uploadImageToSupabase(selectedImageFile);
+            if (!imageUrl) {
+                return; // Image processing failed, don't send message
+            }
+        }
+        
         // Create message object with status
         const message = {
             room_code: currentRoom,
             sender: currentUser,
-            content: content,
+            content: content || '', // Allow empty content if there's an image
+            image_url: imageUrl,
             timestamp: new Date().toISOString(),
             status: 'sent' // Add default status
         };
@@ -1167,8 +1347,9 @@ async function sendMessage(content) {
         // Let the real-time subscription handle displaying the message
         // This ensures proper chronological ordering and prevents duplicates
         
-        // Clear input
+        // Clear input and image preview
         messageInput.value = '';
+        clearImagePreview();
         
         // Update delivery status for other users (if function exists)
         if (window.updateMessageDeliveryStatus) {
@@ -1266,6 +1447,19 @@ async function displayMessage(message) {
     const isDeleted = message.was_deleted || message.content === 'This message was deleted';
     const contentText = isDeleted ? 'This message was deleted' : message.content;
     const contentStyle = isDeleted ? 'color: #ff4444; font-style: italic;' : '';
+    
+    // Handle image content
+    const hasImage = message.image_url && !isDeleted;
+    const hasText = contentText && contentText.trim() !== '';
+    
+    let imageHtml = '';
+    if (hasImage) {
+        imageHtml = `
+            <div class="message-image-container">
+                <img src="${message.image_url}" alt="Shared image" class="message-image" onclick="openImageFullscreen('${message.image_url}')">
+            </div>
+        `;
+    }
 
     // Check if this is a reply message and create reply preview
     let replyPreviewHtml = '';
@@ -1274,6 +1468,23 @@ async function displayMessage(message) {
     }
     
     // Create message content with timestamp
+    let contentHtml = '';
+    if (hasText && hasImage) {
+        // Both text and image
+        contentHtml = `
+            <div class="message-content-with-image">
+                <div class="message-text-content" style="${contentStyle}">${contentText}</div>
+                ${imageHtml}
+            </div>
+        `;
+    } else if (hasImage) {
+        // Image only
+        contentHtml = imageHtml;
+    } else {
+        // Text only (or deleted message)
+        contentHtml = `<div class="content" style="${contentStyle}">${contentText}</div>`;
+    }
+    
     messageElement.innerHTML = `
         ${replyPreviewHtml}
         <div class="message-header">
@@ -1283,7 +1494,7 @@ async function displayMessage(message) {
                 <div class="sender ${vipClass}" style="color: ${profile.color}">${message.sender}</div>
             </div>
         </div>
-        <div class="content" style="${contentStyle}">${contentText}</div>
+        ${contentHtml}
     `;
     
     // Add deleted class if needed
@@ -1326,6 +1537,54 @@ async function displayMessage(message) {
     // Scroll to bottom
     scrollToBottom();
 }
+
+// Open image in fullscreen
+function openImageFullscreen(imageUrl) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10000;
+        cursor: pointer;
+    `;
+    
+    const img = document.createElement('img');
+    img.src = imageUrl;
+    img.style.cssText = `
+        max-width: 90%;
+        max-height: 90%;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    `;
+    
+    overlay.appendChild(img);
+    
+    // Close on click
+    overlay.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+    
+    // Close on Escape key
+    const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+            document.body.removeChild(overlay);
+            document.removeEventListener('keydown', handleEscape);
+        }
+    };
+    document.addEventListener('keydown', handleEscape);
+    
+    document.body.appendChild(overlay);
+}
+
+// Make function globally accessible
+window.openImageFullscreen = openImageFullscreen;
 
 // Format timestamp for display
 function formatMessageTime(timestamp) {

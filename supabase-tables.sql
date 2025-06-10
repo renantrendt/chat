@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS messages (
   room_code TEXT NOT NULL,
   sender TEXT NOT NULL,
   content TEXT NOT NULL,
+  image_url TEXT,
   timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   
   -- Add a foreign key constraint
