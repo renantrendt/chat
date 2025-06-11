@@ -126,16 +126,31 @@ body {
 }
 
 .back-btn {
-    background-color: transparent;
-    border: none;
-    color: #dcddde;
+    background: linear-gradient(135deg, #f04747 0%, #c73e39 100%);
+    border: 2px solid #f04747;
+    color: white;
     cursor: pointer;
     font-size: 14px;
-    padding: 5px 10px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(240, 71, 71, 0.3);
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .back-btn:hover {
-    text-decoration: underline;
+    background: linear-gradient(135deg, #ff5555 0%, #e74c3c 100%);
+    border-color: #ff5555;
+    box-shadow: 0 4px 15px rgba(240, 71, 71, 0.5);
+    transform: translateY(-2px);
+    text-decoration: none;
+}
+
+.back-btn:active {
+    transform: translateY(0px);
+    box-shadow: 0 2px 8px rgba(240, 71, 71, 0.3);
 }
 
 #save-username-btn {

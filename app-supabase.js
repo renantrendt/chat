@@ -1178,8 +1178,66 @@ function subscribeToMessages(roomCode) {
                 if (!messages.some(m => m.id === newMessage.id)) {
                     // Just append new messages (they should be newest)
                     messages.push(newMessage);
-                    await displayMessage(newMessage);
+                    
+                    // Use FAST display for immediate appearance
+                    const messageElement = await displayMessageFast(newMessage);
                     scrollToBottom();
+                    
+                    // Load enhancements separately (non-blocking)
+                    setTimeout(async () => {
+                        const messageId = newMessage.id;
+                        const sender = newMessage.sender;
+                        
+                        // Get profile and apply styling
+                        const profile = await window.getUserProfile(sender);
+                        if (profile) {
+                            const senderElement = messageElement.querySelector('.sender');
+                            if (senderElement) {
+                                senderElement.style.color = profile.color;
+                                if (profile.isVIP) {
+                                    senderElement.classList.add('vip-user');
+                                }
+                            }
+                            
+                            // Add profile image
+                            if (profile.image) {
+                                const messageHeader = messageElement.querySelector('.message-header');
+                                const profileImg = document.createElement('img');
+                                profileImg.src = profile.image;
+                                profileImg.alt = sender;
+                                profileImg.className = 'message-profile-img';
+                                messageHeader.insertBefore(profileImg, messageHeader.firstChild);
+                            }
+                        }
+                        
+                        // Add reaction arrow
+                        if (window.addReactionArrowToMessage) {
+                            window.addReactionArrowToMessage(messageElement, messageId);
+                        }
+                        
+                        // Add reply preview if needed
+                        if (newMessage.reply_to_message_id) {
+                            const replyPreviewHtml = await createReplyPreviewForMessage(newMessage.reply_to_message_id);
+                            if (replyPreviewHtml) {
+                                messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
+                            }
+                        }
+                        
+                        // Add other enhancements for own messages
+                        if (newMessage.sender === currentUser) {
+                            if (window.addDeleteTrashCan && !(newMessage.was_deleted || newMessage.content === 'This message was deleted')) {
+                                window.addDeleteTrashCan(messageElement, newMessage);
+                            }
+                            if (newMessage.status && window.addMessageStatus) {
+                                window.addMessageStatus(messageElement, newMessage.status);
+                            }
+                        }
+                        
+                        // Add visibility observer for read status
+                        if (window.visibilityObserver && newMessage.sender !== currentUser) {
+                            window.visibilityObserver.observe(messageElement);
+                        }
+                    }, 50); // 50ms delay - almost instant but non-blocking
                 }
             }
         )
