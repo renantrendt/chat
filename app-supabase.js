@@ -63,31 +63,26 @@ const subscriptionManager = {
     
     // Register a subscription for tracking
     register(key, subscription, type = 'subscription') {
-        console.log(`Registering ${type}: ${key}`);
         this.subscriptions.set(key, { subscription, type });
     },
     
     // Register a timer for tracking
     registerTimer(key, timerId) {
-        console.log(`Registering timer: ${key}`);
         this.timers.set(key, timerId);
     },
     
     // Register an observer for tracking
     registerObserver(key, observer) {
-        console.log(`Registering observer: ${key}`);
         this.observers.set(key, observer);
     },
     
     // Clean up all subscriptions in proper order
     async cleanupAll() {
-        console.log('Starting coordinated cleanup...');
         const errors = [];
         
         // 1. Clear all timers first (they might interfere with cleanup)
         for (const [key, timerId] of this.timers) {
             try {
-                console.log(`Clearing timer: ${key}`);
                 clearTimeout(timerId);
                 clearInterval(timerId);
             } catch (error) {
@@ -100,7 +95,6 @@ const subscriptionManager = {
         // 2. Disconnect all observers
         for (const [key, observer] of this.observers) {
             try {
-                console.log(`Disconnecting observer: ${key}`);
                 if (observer && typeof observer.disconnect === 'function') {
                     observer.disconnect();
                 }
@@ -115,7 +109,6 @@ const subscriptionManager = {
         const subscriptionEntries = Array.from(this.subscriptions.entries()).reverse();
         for (const [key, { subscription, type }] of subscriptionEntries) {
             try {
-                console.log(`Unsubscribing from ${type}: ${key}`);
                 if (subscription && typeof subscription.unsubscribe === 'function') {
                     await subscription.unsubscribe();
                 } else if (subscription && typeof subscription.untrack === 'function') {
@@ -134,8 +127,6 @@ const subscriptionManager = {
         
         if (errors.length > 0) {
             console.warn('Cleanup completed with errors:', errors);
-        } else {
-            console.log('All subscriptions cleaned up successfully');
         }
         
         return { success: errors.length === 0, errors };
@@ -200,7 +191,6 @@ async function initApp() {
         
         // Re-initialize VIP background features now that we have a username
         if (window.initVIPBackground) {
-            console.log('Re-initializing VIP background after username load...');
             await window.initVIPBackground();
         }
         
@@ -224,8 +214,7 @@ async function initApp() {
         if (window.supabaseClient) {
             window.supabaseClient.auth.getSession()
                 .then(() => {
-                    updateConnectionStatus('Connected');
-                    console.log('Supabase connection verified');
+                                    updateConnectionStatus('Connected');
                 })
                 .catch(err => {
                     console.error('Supabase connection test failed:', err);
@@ -348,8 +337,6 @@ async function saveUsername() {
             
             if (error && error.code !== '23505') { // 23505 is unique violation (username already exists)
                 console.error('Error inserting username:', error);
-            } else {
-                console.log('Username saved to database:', username);
             }
         } catch (err) {
             console.error('Failed to save username to database:', err);
@@ -366,7 +353,6 @@ async function saveUsername() {
         
         // Initialize VIP background features now that we have a username
         if (window.initVIPBackground) {
-            console.log('Initializing VIP background after username save...');
             await window.initVIPBackground();
         }
         
@@ -418,8 +404,6 @@ async function createNewRoom() {
         
         // Save room to local storage
         saveRoom(roomCode);
-        
-        console.log('Room created:', roomCode);
     } catch (error) {
         console.error('Error creating room:', error);
         alert('Failed to create room. Please try again.');
@@ -493,8 +477,6 @@ async function enterRoom(roomCode) {
     // Display room code in chat screen
     currentRoomCode.textContent = roomCode;
     
-    console.log('Entering room:', roomCode);
-    
     // Show chat screen
     showScreen(chatRoomScreen);
     
@@ -547,7 +529,6 @@ async function enterRoom(roomCode) {
 
 async function leaveRoom() {
     const roomToLeave = currentRoom; // Store room before clearing
-    console.log('Leaving room:', roomToLeave);
     
     try {
         // Use centralized cleanup for coordinated subscription management
@@ -595,8 +576,6 @@ async function leaveRoom() {
         window.currentRoom = null;
         messages = [];
         messagesContainer.innerHTML = '';
-        
-        console.log('Room cleanup completed for:', roomToLeave);
     }
 }
 
@@ -657,104 +636,81 @@ function showCopiedFeedback() {
 
 // Message Functions - Optimized for performance
 async function loadMessages(roomCode) {
-    console.log('🚀 Fast loading messages for room:', roomCode);
-    
     // Clear messages container
     messagesContainer.innerHTML = '';
     messages = [];
     
-    // PRIORITY 0.5: Initialize presence system IMMEDIATELY (fastest after messages)
-    setTimeout(() => {
-        if (window.initRoomPresence) {
-            console.log('🏃‍♂️ PRIORITY 0.5: Loading user presence box...');
-            window.initRoomPresence(roomCode, currentUser);
-        }
-    }, 5); // Super fast - 5ms
-    
     try {
-        // Load only recent messages first (last 100) for fast initial load
+        // Load messages from database
         const { data, error } = await window.supabaseClient
             .from('messages')
             .select('*')
             .eq('room_code', roomCode)
             .order('timestamp', { ascending: false })
-            .limit(100); // Only load recent messages initially
+            .limit(100);
         
         if (error) throw error;
-        
-        console.log(`📦 Loaded ${data.length} recent messages for room ${roomCode}`);
         
         if (data && data.length > 0) {
             // Reverse to get chronological order
             messages = [...data.reverse()];
             
-            // Show loading indicator
-            const loadingDiv = document.createElement('div');
-            loadingDiv.id = 'messages-loading';
-            loadingDiv.innerHTML = '<div style="text-align: center; padding: 20px; color: #888;">Loading messages...</div>';
-            messagesContainer.appendChild(loadingDiv);
+            // ===== TRUE PARALLEL LOADING - NO DELAYS =====
+            // Start ALL operations simultaneously
+            const parallelOperations = [];
             
-            // Display messages STREAMING (no waiting for all)
-            let displayedCount = 0;
-            const totalMessages = messages.length;
+            // 1. Build all message DOM elements in parallel
+            const messageFragment = document.createDocumentFragment();
+            const messageElementsPromise = Promise.all(
+                messages.map(message => displayMessageFastToFragment(message))
+            ).then(messageElements => {
+                messageElements.forEach(element => messageFragment.appendChild(element));
+                return messageElements;
+            });
+            parallelOperations.push(messageElementsPromise);
             
-            // Process messages in small batches for smooth streaming
-            const batchSize = 10;
-            for (let i = 0; i < messages.length; i += batchSize) {
-                const batch = messages.slice(i, i + batchSize);
-                
-                // Display batch in parallel
-                const batchPromises = batch.map(async (message) => {
-                    await displayMessageFast(message);
-                    displayedCount++;
-                    
-                    // Update loading indicator with progress
-                    if (loadingDiv.parentNode) {
-                        const progress = Math.round((displayedCount / totalMessages) * 100);
-                        loadingDiv.innerHTML = `<div style="text-align: center; padding: 20px; color: #888;">Loading messages... ${progress}%</div>`;
-                    }
+            // 2. Load all profiles in parallel (while DOM elements are being built)
+            const uniqueSenders = [...new Set(messages.map(m => m.sender))];
+            const profilesPromise = Promise.all(
+                uniqueSenders.map(sender => window.getUserProfile(sender))
+            ).then(profilesArray => {
+                const profileCache = {};
+                uniqueSenders.forEach((sender, index) => {
+                    profileCache[sender] = profilesArray[index];
                 });
-                
-                await Promise.all(batchPromises);
-                
-                // Small delay between batches to keep UI responsive
-                if (i + batchSize < messages.length) {
-                    await new Promise(resolve => setTimeout(resolve, 10));
-                }
-            }
+                return profileCache;
+            });
+            parallelOperations.push(profilesPromise);
             
-            // Remove loading indicator
-            if (loadingDiv.parentNode) {
-                loadingDiv.remove();
-            }
+            // 3. Initialize presence system in parallel
+            const presencePromise = window.initRoomPresence ? 
+                Promise.resolve(window.initRoomPresence(roomCode, currentUser)) : 
+                Promise.resolve();
+            parallelOperations.push(presencePromise);
             
-            // Add "Load More" button if we got 100 messages (means there might be more)
+            // Wait for all parallel operations to complete
+            const [messageElements, profileCache] = await Promise.all(parallelOperations);
+            
+            // Add all messages to DOM at once
+            messagesContainer.appendChild(messageFragment);
+            
+            // Apply ALL enhancements immediately in parallel
+            await Promise.all([
+                applyProfileEnhancementsToAllMessages(messageElements, profileCache),
+                applyReactionEnhancementsToAllMessages(messageElements),
+                loadReplyPreviewsForAllMessages(messageElements)
+            ]);
+            
+            // Add "Load More" button if needed
             if (data.length === 100) {
                 addLoadMoreButton(roomCode);
             }
             
             scrollToBottom();
-            
-            // PRIORITY LOADING SYSTEM
-            // 1st: Messages/images are already loaded (instant)
-            
-            // 0.5: User presence box already loaded above (5ms priority)
-            
-            // 2nd: Profile colors, crowns, profile pics (50ms)
-            setTimeout(() => {
-                loadProfileEnhancements();
-            }, 50);
-            
-            // 3rd: Emojis/reactions (100ms)
-            setTimeout(() => {
-                loadReactionEnhancements();
-            }, 100);
         }
         
         // Subscribe to new messages
         subscribeToMessages(roomCode);
-        
-        console.log('✅ Fast message loading completed');
         
     } catch (error) {
         console.error('❌ Error loading messages:', error);
@@ -841,15 +797,169 @@ async function displayMessageFast(message) {
     return messageElement;
 }
 
-// PRIORITY 2: Load profile enhancements (colors, crowns, profile pics)
-async function loadProfileEnhancements() {
-    console.log('👑 Loading profile enhancements (colors, crowns, pics)...');
+// Build message element for document fragment (parallel loading)
+async function displayMessageFastToFragment(message) {
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message');
     
-    try {
-        const messageElements = document.querySelectorAll('.message[data-message-id]');
-        const uniqueSenders = [...new Set(Array.from(messageElements).map(el => el.dataset.sender))];
+    // Add message ID and sender as data attributes
+    if (message.id) {
+        messageElement.dataset.messageId = message.id;
+    }
+    messageElement.dataset.sender = message.sender;
+    
+    // Add class based on sender
+    if (message.sender === currentUser) {
+        messageElement.classList.add('sent');
+    } else {
+        messageElement.classList.add('received');
+    }
+    
+    // Format timestamp
+    const timestamp = formatMessageTime(message.timestamp);
+    
+    // Check if message was deleted
+    const isDeleted = message.was_deleted || message.content === 'This message was deleted';
+    const contentText = isDeleted ? 'This message was deleted' : message.content;
+    const contentStyle = isDeleted ? 'color: #ff4444; font-style: italic;' : '';
+    
+    // Handle image content
+    const hasImage = message.image_url && !isDeleted;
+    const hasText = contentText && contentText.trim() !== '';
+    
+    let imageHtml = '';
+    if (hasImage) {
+        imageHtml = `
+            <div class="message-image-container">
+                <img src="${message.image_url}" alt="Shared image" class="message-image" onclick="openImageFullscreen('${message.image_url}')">
+            </div>
+        `;
+    }
+    
+    // Create content HTML based on what's available
+    let contentHtml = '';
+    if (hasText && hasImage) {
+        contentHtml = `
+            <div class="message-content-with-image">
+                <div class="message-text-content" style="${contentStyle}">${contentText}</div>
+                ${imageHtml}
+            </div>
+        `;
+    } else if (hasImage) {
+        contentHtml = imageHtml;
+    } else {
+        contentHtml = `<div class="content" style="${contentStyle}">${contentText}</div>`;
+    }
+    
+    // Create message content
+    messageElement.innerHTML = `
+        <div class="message-header">
+            <div class="message-info">
+                <div class="timestamp">${timestamp}</div>
+                <div class="sender" style="color: #ffffff">${message.sender}</div>
+            </div>
+        </div>
+        ${contentHtml}
+    `;
+    
+    // Add deleted class if needed
+    if (isDeleted) {
+        messageElement.classList.add('deleted');
+    }
+    
+    return messageElement;
+}
+
+// Apply profile enhancements to all messages at once (parallel loading)
+async function applyProfileEnhancementsToAllMessages(messageElements, profileCache) {
+    await Promise.all(messageElements.map(async (messageElement) => {
+        const sender = messageElement.dataset.sender;
+        const profile = profileCache[sender];
+        if (!profile) return;
         
-        console.log(`👥 Pre-loading profiles for ${uniqueSenders.length} users...`);
+        // Update sender styling with colors and VIP status
+        const senderElement = messageElement.querySelector('.sender');
+        if (senderElement) {
+            senderElement.style.color = profile.color;
+            if (profile.isVIP) {
+                senderElement.classList.add('vip-user');
+            }
+        }
+        
+        // Add profile image
+        if (profile.image) {
+            const messageHeader = messageElement.querySelector('.message-header');
+            if (messageHeader && !messageHeader.querySelector('.message-profile-img')) {
+                const profileImg = document.createElement('img');
+                profileImg.src = profile.image;
+                profileImg.alt = sender;
+                profileImg.className = 'message-profile-img';
+                messageHeader.insertBefore(profileImg, messageHeader.firstChild);
+            }
+        }
+    }));
+}
+
+// Apply reaction enhancements to all messages at once (parallel loading)
+async function applyReactionEnhancementsToAllMessages(messageElements) {
+    await Promise.all(messageElements.map(async (messageElement) => {
+        const messageId = messageElement.dataset.messageId;
+        const messageData = messages.find(m => m.id === messageId);
+        if (!messageData) return;
+        
+        // Add reaction arrow
+        if (window.addReactionArrowToMessage) {
+            window.addReactionArrowToMessage(messageElement, messageId);
+        }
+        
+        // Don't add buttons to deleted messages
+        const isDeleted = messageData.was_deleted || messageData.content === 'This message was deleted';
+        
+        if (!isDeleted) {
+            // Add delete trash can for own recent messages
+            if (window.addDeleteTrashCan && messageData.sender === currentUser) {
+                window.addDeleteTrashCan(messageElement, messageData);
+            }
+            
+            // Add message status for sent messages
+            if (messageData.sender === currentUser && messageData.status && window.addMessageStatus) {
+                window.addMessageStatus(messageElement, messageData.status);
+            }
+        }
+        
+        // Add visibility observer for read status
+        if (window.visibilityObserver && messageData.sender !== currentUser) {
+            window.visibilityObserver.observe(messageElement);
+        }
+    }));
+    
+    // Load actual reactions for all messages at once
+    if (window.loadAllReactions) {
+        window.loadAllReactions();
+    }
+}
+
+// Load reply previews for all messages at once (parallel loading)
+async function loadReplyPreviewsForAllMessages(messageElements) {
+    const replyMessages = messages.filter(m => m.reply_to_message_id);
+    if (replyMessages.length === 0) return;
+    
+    await Promise.all(replyMessages.map(async (messageData) => {
+        const messageElement = messageElements.find(el => el.dataset.messageId === messageData.id);
+        if (messageElement && messageData.reply_to_message_id) {
+            const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
+            if (replyPreviewHtml) {
+                messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
+            }
+        }
+    }));
+}
+
+// Load profile enhancements (legacy function - now uses parallel loading)
+async function loadProfileEnhancements() {
+    try {
+        const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
+        const uniqueSenders = [...new Set(messageElements.map(el => el.dataset.sender))];
         
         // Load all profiles in parallel
         const profilePromises = uniqueSenders.map(sender => window.getUserProfile(sender));
@@ -861,131 +971,43 @@ async function loadProfileEnhancements() {
             profileCache[sender] = profilesArray[index];
         });
         
-        console.log('✅ Profiles cached, applying visual enhancements...');
+        // Apply enhancements using the new parallel function
+        await applyProfileEnhancementsToAllMessages(messageElements, profileCache);
         
-        // Apply profile enhancements to all messages
-        await Promise.all(Array.from(messageElements).map(async (messageElement) => {
-            const sender = messageElement.dataset.sender;
-            const profile = profileCache[sender];
-            if (!profile) return;
-            
-            // Update sender styling with colors and VIP status
-            const senderElement = messageElement.querySelector('.sender');
-            if (senderElement) {
-                senderElement.style.color = profile.color;
-                if (profile.isVIP) {
-                    senderElement.classList.add('vip-user'); // Crown/VIP styling
-                }
-            }
-            
-            // Add profile image
-            if (profile.image) {
-                const messageHeader = messageElement.querySelector('.message-header');
-                if (messageHeader && !messageHeader.querySelector('.message-profile-img')) {
-                    const profileImg = document.createElement('img');
-                    profileImg.src = profile.image;
-                    profileImg.alt = sender;
-                    profileImg.className = 'message-profile-img';
-                    messageHeader.insertBefore(profileImg, messageHeader.firstChild);
-                }
-            }
-        }));
-        
-        console.log('✅ Profile enhancements completed!');
-        
-        // Load reply previews after profile stuff
-        setTimeout(() => {
-            loadReplyPreviews();
-        }, 25);
+        // Load reply previews immediately (no delay)
+        await loadReplyPreviews();
         
     } catch (error) {
         console.error('❌ Error loading profile enhancements:', error);
     }
 }
 
-// PRIORITY 3: Load reaction enhancements (emojis, delete buttons, etc.)
+// Load reaction enhancements (legacy function - now uses parallel loading)
 async function loadReactionEnhancements() {
-    console.log('😄 Loading reaction enhancements (emojis, buttons)...');
-    
     try {
-        const messageElements = document.querySelectorAll('.message[data-message-id]');
+        const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
         
-        // Apply reaction arrows and other interactive elements
-        await Promise.all(Array.from(messageElements).map(async (messageElement) => {
-            const messageId = messageElement.dataset.messageId;
-            const messageData = messages.find(m => m.id === messageId);
-            if (!messageData) return;
-            
-            // Add reaction arrow
-            if (window.addReactionArrowToMessage) {
-                window.addReactionArrowToMessage(messageElement, messageId);
-            }
-            
-            // Don't add buttons to deleted messages
-            const isDeleted = messageData.was_deleted || messageData.content === 'This message was deleted';
-            
-            if (!isDeleted) {
-                // Add delete trash can for own recent messages
-                if (window.addDeleteTrashCan && messageData.sender === currentUser) {
-                    window.addDeleteTrashCan(messageElement, messageData);
-                }
-                
-                // Add message status for sent messages
-                if (messageData.sender === currentUser && messageData.status && window.addMessageStatus) {
-                    window.addMessageStatus(messageElement, messageData.status);
-                }
-            }
-            
-            // Add visibility observer for read status
-            if (window.visibilityObserver && messageData.sender !== currentUser) {
-                window.visibilityObserver.observe(messageElement);
-            }
-        }));
-        
-        console.log('✅ Reaction buttons added!');
-        
-        // Load actual reactions last (least important)
-        setTimeout(() => {
-            if (window.loadAllReactions) {
-                console.log('🎭 Loading all reactions...');
-                window.loadAllReactions();
-            }
-        }, 50);
-        
-        console.log('✅ Reaction enhancements completed!');
+        // Apply enhancements using the new parallel function
+        await applyReactionEnhancementsToAllMessages(messageElements);
         
     } catch (error) {
         console.error('❌ Error loading reaction enhancements:', error);
     }
 }
 
-// Helper: Load reply previews separately
+// Load reply previews (legacy function - now uses parallel loading)
 async function loadReplyPreviews() {
-    const replyMessages = messages.filter(m => m.reply_to_message_id);
-    if (replyMessages.length === 0) return;
-    
-    console.log(`💬 Loading ${replyMessages.length} reply previews...`);
-    
-    await Promise.all(replyMessages.map(async (messageData) => {
-        const messageElement = document.querySelector(`[data-message-id="${messageData.id}"]`);
-        if (messageElement && messageData.reply_to_message_id) {
-            const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
-            if (replyPreviewHtml) {
-                messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
-            }
-        }
-    }));
-    
-    console.log('✅ Reply previews loaded');
+    const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
+    await loadReplyPreviewsForAllMessages(messageElements);
 }
 
-// OLD FUNCTION - Keep for compatibility, now uses prioritized loading
+// Load all message enhancements in parallel (legacy function - no delays)
 async function loadMessageEnhancements() {
-    console.log('🎨 Using prioritized enhancement loading...');
-    
-    // Call the new prioritized functions with proper timing
-    setTimeout(() => loadProfileEnhancements(), 50);
-    setTimeout(() => loadReactionEnhancements(), 100);
+    // Load all enhancements in parallel instead of with delays
+    await Promise.all([
+        loadProfileEnhancements(),
+        loadReactionEnhancements()
+    ]);
 }
 
 // Add Load More button for older messages
@@ -1069,7 +1091,6 @@ window.loadMoreMessages = async function(roomCode) {
         if (error) throw error;
         
         if (data && data.length > 0) {
-            console.log(`📦 Loaded ${data.length} older messages`);
             
             // Reverse to get chronological order and prepend to messages
             const olderMessages = data.reverse();
@@ -1097,14 +1118,11 @@ window.loadMoreMessages = async function(roomCode) {
             const newScrollHeight = messagesContainer.scrollHeight;
             messagesContainer.scrollTop = newScrollHeight - oldScrollHeight;
             
-            // Load enhancements for older messages with priorities
-            setTimeout(() => {
-                loadProfileEnhancementsForRange(0, olderMessages.length);
-            }, 50);
-            
-            setTimeout(() => {
-                loadReactionEnhancementsForRange(0, olderMessages.length);
-            }, 100);
+            // Load enhancements for older messages in parallel
+            await Promise.all([
+                loadProfileEnhancementsForRange(0, olderMessages.length),
+                loadReactionEnhancementsForRange(0, olderMessages.length)
+            ]);
             
             // Remove load more button if we got fewer than 50 messages (no more to load)
             if (data.length < 50) {
@@ -1131,7 +1149,6 @@ window.loadMoreMessages = async function(roomCode) {
 async function loadProfileEnhancementsForRange(startIndex, count) {
     try {
         const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]')).slice(startIndex, startIndex + count);
-        console.log(`👑 Loading profile enhancements for ${messageElements.length} older messages...`);
         
         // Pre-load all profile data for this range in parallel
         const uniqueSenders = [...new Set(messageElements.map(el => el.dataset.sender))];
@@ -1172,26 +1189,22 @@ async function loadProfileEnhancementsForRange(startIndex, count) {
             }
         }));
         
-        // Load reply previews for this range
-        setTimeout(async () => {
-            const replyMessages = messageElements
-                .map(el => messages.find(m => m.id === el.dataset.messageId))
-                .filter(m => m && m.reply_to_message_id);
-            
-            if (replyMessages.length > 0) {
-                await Promise.all(replyMessages.map(async (messageData) => {
-                    const messageElement = document.querySelector(`[data-message-id="${messageData.id}"]`);
-                    if (messageElement && messageData.reply_to_message_id) {
-                        const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
-                        if (replyPreviewHtml) {
-                            messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
-                        }
-                    }
-                }));
-            }
-        }, 25);
+        // Load reply previews for this range immediately
+        const replyMessages = messageElements
+            .map(el => messages.find(m => m.id === el.dataset.messageId))
+            .filter(m => m && m.reply_to_message_id);
         
-        console.log('✅ Profile enhancements for older messages completed!');
+        if (replyMessages.length > 0) {
+            await Promise.all(replyMessages.map(async (messageData) => {
+                const messageElement = document.querySelector(`[data-message-id="${messageData.id}"]`);
+                if (messageElement && messageData.reply_to_message_id) {
+                    const replyPreviewHtml = await createReplyPreviewForMessage(messageData.reply_to_message_id);
+                    if (replyPreviewHtml) {
+                        messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
+                    }
+                }
+            }));
+        }
         
     } catch (error) {
         console.error('❌ Error loading profile enhancements for range:', error);
@@ -1202,7 +1215,6 @@ async function loadProfileEnhancementsForRange(startIndex, count) {
 async function loadReactionEnhancementsForRange(startIndex, count) {
     try {
         const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]')).slice(startIndex, startIndex + count);
-        console.log(`😄 Loading reaction enhancements for ${messageElements.length} older messages...`);
         
         // Apply reaction enhancements in parallel
         await Promise.all(messageElements.map(async (messageElement) => {
@@ -1226,20 +1238,18 @@ async function loadReactionEnhancementsForRange(startIndex, count) {
             }
         }));
         
-        console.log('✅ Reaction enhancements for older messages completed!');
-        
     } catch (error) {
         console.error('❌ Error loading reaction enhancements for range:', error);
     }
 }
 
-// OLD FUNCTION - Keep for compatibility, now uses prioritized loading
+// Load all enhancements for a range in parallel (legacy function - no delays)
 async function loadMessageEnhancementsForRange(startIndex, count) {
-    console.log('🎨 Using prioritized enhancement loading for range...');
-    
-    // Call the new prioritized functions with proper timing
-    setTimeout(() => loadProfileEnhancementsForRange(startIndex, count), 50);
-    setTimeout(() => loadReactionEnhancementsForRange(startIndex, count), 100);
+    // Load all enhancements in parallel instead of with delays
+    await Promise.all([
+        loadProfileEnhancementsForRange(startIndex, count),
+        loadReactionEnhancementsForRange(startIndex, count)
+    ]);
 }
 
 function subscribeToMessages(roomCode) {
@@ -1258,7 +1268,6 @@ function subscribeToMessages(roomCode) {
             }, 
             async (payload) => {
                 const newMessage = payload.new;
-                console.log('Real-time message received:', newMessage);
                 
                 // Verify we're still in the same room
                 if (currentRoom !== roomCode) {
@@ -1274,72 +1283,71 @@ function subscribeToMessages(roomCode) {
                     const messageElement = await displayMessageFast(newMessage);
                     scrollToBottom();
                     
-                    // PRIORITIZED LOADING for real-time messages
+                    // PARALLEL LOADING for real-time messages - no delays!
                     const messageId = newMessage.id;
                     const sender = newMessage.sender;
                     
-                    // PRIORITY 2: Profile enhancements (50ms)
-                    setTimeout(async () => {
-                        const profile = await window.getUserProfile(sender);
-                        if (profile) {
-                            const senderElement = messageElement.querySelector('.sender');
-                            if (senderElement) {
-                                senderElement.style.color = profile.color;
-                                if (profile.isVIP) {
-                                    senderElement.classList.add('vip-user');
-                                }
-                            }
-                            
-                            // Add profile image
-                            if (profile.image) {
-                                const messageHeader = messageElement.querySelector('.message-header');
-                                if (messageHeader && !messageHeader.querySelector('.message-profile-img')) {
-                                    const profileImg = document.createElement('img');
-                                    profileImg.src = profile.image;
-                                    profileImg.alt = sender;
-                                    profileImg.className = 'message-profile-img';
-                                    messageHeader.insertBefore(profileImg, messageHeader.firstChild);
-                                }
-                            }
-                        }
-                        
-                        // Add reply preview if needed (part of profile priority)
-                        if (newMessage.reply_to_message_id) {
-                            const replyPreviewHtml = await createReplyPreviewForMessage(newMessage.reply_to_message_id);
-                            if (replyPreviewHtml) {
-                                messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
-                            }
-                        }
-                    }, 50);
+                    // Apply ALL enhancements immediately in parallel
+                    const profile = await window.getUserProfile(sender);
                     
-                    // PRIORITY 3: Reactions and buttons (100ms)
-                    setTimeout(() => {
+                    // Apply profile enhancements immediately
+                    if (profile) {
+                        const senderElement = messageElement.querySelector('.sender');
+                        if (senderElement) {
+                            senderElement.style.color = profile.color;
+                            if (profile.isVIP) {
+                                senderElement.classList.add('vip-user');
+                            }
+                        }
+                        
+                        // Add profile image
+                        if (profile.image) {
+                            const messageHeader = messageElement.querySelector('.message-header');
+                            if (messageHeader && !messageHeader.querySelector('.message-profile-img')) {
+                                const profileImg = document.createElement('img');
+                                profileImg.src = profile.image;
+                                profileImg.alt = sender;
+                                profileImg.className = 'message-profile-img';
+                                messageHeader.insertBefore(profileImg, messageHeader.firstChild);
+                            }
+                        }
+                    }
+                    
+                    // Apply reaction and reply enhancements immediately
+                    await Promise.all([
                         // Add reaction arrow
-                        if (window.addReactionArrowToMessage) {
-                            window.addReactionArrowToMessage(messageElement, messageId);
-                        }
+                        window.addReactionArrowToMessage ? 
+                            Promise.resolve(window.addReactionArrowToMessage(messageElement, messageId)) : 
+                            Promise.resolve(),
                         
-                        // Add other enhancements for own messages
-                        if (newMessage.sender === currentUser) {
-                            if (window.addDeleteTrashCan && !(newMessage.was_deleted || newMessage.content === 'This message was deleted')) {
-                                window.addDeleteTrashCan(messageElement, newMessage);
-                            }
-                            if (newMessage.status && window.addMessageStatus) {
-                                window.addMessageStatus(messageElement, newMessage.status);
-                            }
+                        // Add reply preview if needed
+                        newMessage.reply_to_message_id ? 
+                            createReplyPreviewForMessage(newMessage.reply_to_message_id).then(replyPreviewHtml => {
+                                if (replyPreviewHtml) {
+                                    messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
+                                }
+                            }) : 
+                            Promise.resolve()
+                    ]);
+                    
+                    // Add other enhancements for own messages
+                    if (newMessage.sender === currentUser) {
+                        if (window.addDeleteTrashCan && !(newMessage.was_deleted || newMessage.content === 'This message was deleted')) {
+                            window.addDeleteTrashCan(messageElement, newMessage);
                         }
-                        
-                        // Add visibility observer for read status
-                        if (window.visibilityObserver && newMessage.sender !== currentUser) {
-                            window.visibilityObserver.observe(messageElement);
+                        if (newMessage.status && window.addMessageStatus) {
+                            window.addMessageStatus(messageElement, newMessage.status);
                         }
-                    }, 100);
+                    }
+                    
+                    // Add visibility observer for read status
+                    if (window.visibilityObserver && newMessage.sender !== currentUser) {
+                        window.visibilityObserver.observe(messageElement);
+                    }
                 }
             }
         )
-        .subscribe((status) => {
-            console.log(`Subscription status for room ${roomCode}:`, status);
-        });
+        .subscribe();
     
     // Register with subscription manager
     subscriptionManager.register('messages', messageSubscription, 'message-updates');
@@ -1409,26 +1417,21 @@ function displayImagePreview(file) {
 }
 
 function clearImagePreview() {
-    console.log('🗑️ X button clicked - clearing image preview');
     imagePreviewContainer.style.display = 'none';
     imagePreview.src = '';
     selectedImageFile = null;
     imageFileInput.value = '';
     messageInput.placeholder = 'Type a message...';
-    console.log('✅ Image preview cleared');
 }
 
 async function uploadImageToSupabase(file) {
     if (!file) return null;
     
     try {
-        console.log('Converting image to base64:', file.name);
-        
         // Convert image to base64 (same as profile system)
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = function(e) {
-                console.log('Image converted to base64 successfully');
                 resolve(e.target.result); // This is the base64 data URL
             };
             reader.onerror = function(error) {
@@ -1472,10 +1475,7 @@ async function sendMessage(content) {
         // Add reply_to_message_id if in reply mode
         if (window.currentReplyMessageId) {
             message.reply_to_message_id = window.currentReplyMessageId;
-            console.log('💬 Sending reply to message:', window.currentReplyMessageId);
         }
-        
-        console.log('Sending message:', message);
         
         // Insert into Supabase
         const { data, error } = await window.supabaseClient
@@ -1485,11 +1485,8 @@ async function sendMessage(content) {
         
         if (error) throw error;
         
-        console.log('Message sent successfully:', data);
-        
         // Clear reply state after sending
         if (window.currentReplyMessageId) {
-            console.log('🧹 Clearing reply state after sending');
             if (window.hideReplyPreview) {
                 window.hideReplyPreview();
             }
@@ -1519,8 +1516,6 @@ async function sendMessage(content) {
 // Create reply preview HTML for a message
 async function createReplyPreviewForMessage(originalMessageId) {
     try {
-        console.log('📄 Creating reply preview for original message:', originalMessageId);
-        
         // Try to get original message from database
         const { data: originalMessage, error } = await window.supabaseClient
             .from('messages')
@@ -1529,7 +1524,6 @@ async function createReplyPreviewForMessage(originalMessageId) {
             .single();
         
         if (error || !originalMessage) {
-            console.warn('❌ Could not find original message:', originalMessageId);
             return `<div class="message-reply-preview deleted">
                 <span class="reply-icon">↩️</span>
                 <span class="original-message-deleted" style="color: #ff4444; font-style: italic;">This message was deleted</span>
@@ -1548,8 +1542,6 @@ async function createReplyPreviewForMessage(originalMessageId) {
         const truncatedContent = window.truncateMessageForPreview ? 
             window.truncateMessageForPreview(originalMessage.content) : 
             originalMessage.content.substring(0, 80) + '...';
-        
-        console.log('✅ Created reply preview for:', originalMessage.sender);
         
         return `<div class="message-reply-preview" onclick="scrollToMessage('${originalMessageId}')">
             <span class="reply-icon">↩️</span>
@@ -1665,17 +1657,8 @@ async function displayMessage(message) {
     messagesContainer.appendChild(messageElement);
     
     // Add reaction arrow and functionality
-    console.log('Checking for reaction system availability...', {
-        hasFunction: !!window.addReactionArrowToMessage,
-        messageId: message.id,
-        systemInitialized: window.reactionSystemInitialized
-    });
-    
     if (window.addReactionArrowToMessage) {
-        console.log('Calling addReactionArrowToMessage for message:', message.id);
         window.addReactionArrowToMessage(messageElement, message.id);
-    } else {
-        console.warn('window.addReactionArrowToMessage is not available');
     }
     
     // Add delete trash can for own recent messages (only if not deleted)
@@ -1945,14 +1928,11 @@ function formatVisitedTime(timestamp) {
 
 // Scroll to message functionality
 function scrollToMessage(messageId) {
-    console.log('🎯 Scrolling to message:', messageId);
-    
     try {
         // Find the message element
         const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
         
         if (!messageElement) {
-            console.warn('❌ Message not found in current view:', messageId);
             showScrollFeedback('Message not visible in current view', 'warning');
             return;
         }
@@ -1969,8 +1949,6 @@ function scrollToMessage(messageId) {
             highlightMessage(messageElement);
         }, 500); // Delay to let scroll animation finish
         
-        console.log('✅ Scrolled to message successfully');
-        
     } catch (error) {
         console.error('❌ Error scrolling to message:', error);
         showScrollFeedback('Error finding message', 'error');
@@ -1981,21 +1959,17 @@ function scrollToMessage(messageId) {
 function highlightMessage(messageElement) {
     if (!messageElement) return;
     
-    console.log('✨ Highlighting message');
-    
     // Add highlight class
     messageElement.classList.add('message-highlight');
     
     // Remove highlight class after animation
     setTimeout(() => {
         messageElement.classList.remove('message-highlight');
-        console.log('✅ Message highlight removed');
     }, 2000); // Match animation duration
 }
 
 // Show feedback for scroll actions
 function showScrollFeedback(message, type = 'info') {
-    console.log(`📢 ${type.toUpperCase()}: ${message}`);
     
     // Create feedback element
     const feedback = document.createElement('div');
@@ -2046,8 +2020,6 @@ function showScrollFeedback(message, type = 'info') {
 
 // Test function for scroll navigation
 function testScrollNavigation() {
-    console.log('🎯 Testing scroll navigation...');
-    
     // Find all messages
     const messageElements = document.querySelectorAll('.message[data-message-id]');
     if (messageElements.length === 0) {
@@ -2060,8 +2032,6 @@ function testScrollNavigation() {
     const testMessage = messageElements[randomIndex];
     const messageId = testMessage.dataset.messageId;
     
-    console.log('📝 Testing scroll to message:', messageId);
-    
     // Scroll to bottom first to make the effect more visible
     const messagesContainer = document.getElementById('messages-container');
     if (messagesContainer) {
@@ -2071,7 +2041,6 @@ function testScrollNavigation() {
     // Wait a moment, then scroll to the test message
     setTimeout(() => {
         scrollToMessage(messageId);
-        console.log('✅ Scroll navigation test initiated!');
     }, 1000);
 }
 

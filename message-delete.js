@@ -1,5 +1,4 @@
 // Message Delete System
-console.log('🗑️ Loading message delete system...');
 
 // Global variables
 let deleteModal = null;
@@ -7,16 +6,12 @@ let currentDeleteMessageId = null;
 
 // Initialize delete system
 function initDeleteSystem() {
-    console.log('🗑️ Initializing message delete system...');
-    
     try {
         // Create delete confirmation modal
         createDeleteModal();
         
         // Set up event listeners
         setupDeleteEventListeners();
-        
-        console.log('✅ Delete system initialized successfully');
         
     } catch (error) {
         console.error('❌ Error initializing delete system:', error);
@@ -241,13 +236,10 @@ function addDeleteTrashCan(messageElement, messageData) {
     
     // Add to message element
     messageElement.appendChild(trashBtn);
-    
-    console.log('🗑️ Added delete trash can to message:', messageData.id);
 }
 
 // Show delete confirmation modal
 function showDeleteConfirmation(messageId) {
-    console.log('🗑️ Showing delete confirmation for message:', messageId);
     
     currentDeleteMessageId = messageId;
     
@@ -260,8 +252,6 @@ function showDeleteConfirmation(messageId) {
 async function confirmDeleteMessage() {
     if (!currentDeleteMessageId) return;
     
-    console.log('🗑️ Confirming delete for message:', currentDeleteMessageId);
-    
     try {
         // Update Yes button to show loading
         const yesBtn = deleteModal.querySelector('.delete-yes-btn');
@@ -269,23 +259,12 @@ async function confirmDeleteMessage() {
         yesBtn.disabled = true;
         yesBtn.textContent = 'Deleting...';
         
-        // Delete message in database
-        console.log('🔍 Attempting to delete message with data:', {
-            content: 'This message was deleted',
-            was_deleted: true,
-            deleted_at: new Date().toISOString()
-        });
-        
         // Full update with all fields
         const updateData = {
             content: 'This message was deleted',
             was_deleted: true,
             deleted_at: new Date().toISOString()
         };
-        
-        console.log('🔄 Updating message with:', updateData);
-        console.log('🔄 Message ID:', currentDeleteMessageId);
-        console.log('🔄 Current user:', window.currentUser);
         
         // First verify this message belongs to current user
         const { data: messageCheck, error: checkError } = await window.supabaseClient
@@ -299,13 +278,9 @@ async function confirmDeleteMessage() {
             throw new Error('Could not verify message ownership');
         }
         
-        console.log('📋 Message check result:', messageCheck);
-        
         if (messageCheck.sender !== window.currentUser) {
             throw new Error('You can only delete your own messages');
         }
-        
-        console.log('✅ Message ownership verified, proceeding with update...');
         
         const { data, error } = await window.supabaseClient
             .from('messages')
@@ -324,10 +299,6 @@ async function confirmDeleteMessage() {
             });
             throw error;
         }
-        
-        console.log('✅ Supabase response data:', data);
-        
-        console.log('✅ Message deleted successfully:', currentDeleteMessageId);
         
         // Update message display immediately
         updateDeletedMessageDisplay(currentDeleteMessageId);
@@ -364,8 +335,6 @@ async function confirmDeleteMessage() {
 
 // Cancel delete message
 function cancelDeleteMessage() {
-    console.log('❌ Canceling delete confirmation');
-    
     currentDeleteMessageId = null;
     
     if (deleteModal) {
@@ -407,14 +376,10 @@ function updateDeletedMessageDisplay(messageId) {
     
     // Add deleted class
     messageElement.classList.add('deleted');
-    
-    console.log('✅ Updated deleted message display:', messageId);
 }
 
 // Update all reply previews that reference a deleted message
 function updateReplyPreviewsForDeletedMessage(deletedMessageId) {
-    console.log('🔄 Updating reply previews for deleted message:', deletedMessageId);
-    
     // Find all reply previews that might reference this deleted message
     const allReplyPreviews = document.querySelectorAll('.message-reply-preview');
     
@@ -432,8 +397,6 @@ function updateReplyPreviewsForDeletedMessage(deletedMessageId) {
             // Remove the onclick since we can't scroll to a deleted message
             preview.removeAttribute('onclick');
             preview.style.cursor = 'default';
-            
-            console.log('✅ Updated reply preview to show deleted message');
         }
     });
 }
@@ -448,8 +411,6 @@ async function removeAllReactionsForMessage(messageId) {
         
         if (error) throw error;
         
-        console.log('✅ Removed all reactions for deleted message:', messageId);
-        
     } catch (error) {
         console.error('❌ Error removing reactions for deleted message:', error);
     }
@@ -457,8 +418,6 @@ async function removeAllReactionsForMessage(messageId) {
 
 // Cleanup function
 function cleanupDeleteSystem() {
-    console.log('🗑️ Cleaning up delete system...');
-    
     // Remove modal
     if (deleteModal && deleteModal.parentNode) {
         deleteModal.parentNode.removeChild(deleteModal);
@@ -477,8 +436,6 @@ function cleanupDeleteSystem() {
     
     // Reset state
     currentDeleteMessageId = null;
-    
-    console.log('✅ Delete system cleanup completed');
 }
 
 // Make functions available globally
@@ -496,6 +453,4 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initDeleteSystem);
 } else {
     initDeleteSystem();
-}
-
-console.log('✅ Message delete system loaded successfully'); 
+} 
