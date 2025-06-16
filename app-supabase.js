@@ -109,7 +109,6 @@ const subscriptionManager = {
         const subscriptionEntries = Array.from(this.subscriptions.entries()).reverse();
         for (const [key, { subscription, type }] of subscriptionEntries) {
             try {
-                console.log(`🧹 Bulk cleaning up ${type}: ${key}`);
                 if (subscription && typeof subscription.unsubscribe === 'function') {
                     await subscription.unsubscribe();
                     // Give each channel time to fully close
@@ -122,9 +121,8 @@ const subscriptionManager = {
                         await new Promise(resolve => setTimeout(resolve, 50));
                     }
                 }
-                console.log(`✅ Bulk cleanup success: ${key}`);
             } catch (error) {
-                console.error(`❌ Error unsubscribing from ${key}:`, error);
+                console.error(`Error unsubscribing from ${key}:`, error);
                 errors.push(`Subscription ${key}: ${error.message}`);
             }
         }
@@ -132,7 +130,6 @@ const subscriptionManager = {
         
         // Additional cleanup delay to ensure all channels are closed
         if (subscriptionEntries.length > 0) {
-            console.log('⏳ Waiting for all Supabase channels to fully close...');
             await new Promise(resolve => setTimeout(resolve, 200));
         }
         
@@ -148,7 +145,6 @@ const subscriptionManager = {
         if (this.subscriptions.has(key)) {
             const { subscription, type } = this.subscriptions.get(key);
             try {
-                console.log(`🧹 Cleaning up ${type}: ${key}`);
                 if (subscription && typeof subscription.unsubscribe === 'function') {
                     await subscription.unsubscribe();
                     // Give Supabase time to fully close the channel
@@ -162,10 +158,9 @@ const subscriptionManager = {
                     }
                 }
                 this.subscriptions.delete(key);
-                console.log(`✅ Successfully cleaned up ${key}`);
                 return { success: true };
             } catch (error) {
-                console.error(`❌ Error cleaning up ${key}:`, error);
+                console.error(`Error cleaning up ${key}:`, error);
                 this.subscriptions.delete(key); // Remove anyway to prevent stuck state
                 return { success: false, error: error.message };
             }
@@ -297,13 +292,9 @@ function addEventListeners() {
             const textContent = this.value.trim();
             const hasImage = selectedImageFile !== null;
             
-            console.log(`📨 ENTER pressed - Text: "${textContent}", Image: ${hasImage ? 'Yes' : 'No'}`);
-            
             if (textContent !== '' || hasImage) {
                 sendMessage(textContent);
                 this.value = '';
-            } else {
-                console.log('❌ Enter pressed but no content or image to send');
             }
         }
     });
@@ -326,13 +317,11 @@ function addEventListeners() {
 
     imageFileInput.addEventListener('change', handleImageSelect);
     
-    // Debug and fix the X button
-    console.log('removeImageBtn element:', removeImageBtn);
+    // Setup the X button
     if (removeImageBtn) {
         removeImageBtn.addEventListener('click', clearImagePreview);
-        console.log('✅ X button event listener attached');
     } else {
-        console.error('❌ removeImageBtn element not found!');
+        console.error('removeImageBtn element not found!');
     }
 
     // Drag and drop functionality
@@ -343,7 +332,6 @@ function addEventListeners() {
     // Alternative X button handler using event delegation (backup method)
     document.addEventListener('click', function(e) {
         if (e.target && e.target.id === 'remove-image-btn') {
-            console.log('🗑️ X button clicked via event delegation');
             clearImagePreview();
         }
     });
@@ -498,7 +486,6 @@ async function enterRoom(roomCode) {
     if (!roomCode || !currentUser) return;
     
     // 🔧 FORCE CLEANUP: Ensure all previous subscriptions are cleared
-    console.log('🧹 Force cleaning all subscriptions before entering room...');
     await subscriptionManager.cleanupAll();
     
     // Set current room
@@ -1548,7 +1535,6 @@ async function handleNewMessageInsert(newMessage) {
         // Message exists - check if it's optimistic
         const optimisticElement = document.querySelector(`[data-message-id="${newMessage.id}"].optimistic`);
         if (optimisticElement) {
-            console.log('🔄 Real-time message received for optimistic message, replacing...');
             // Remove optimistic version
             optimisticElement.remove();
             // Remove from messages array
@@ -1558,7 +1544,6 @@ async function handleNewMessageInsert(newMessage) {
             }
             // Continue with normal insertion below
         } else {
-            console.log('⚠️ Real-time message already exists (not optimistic), skipping');
             return; // Regular duplicate, skip
         }
     }
@@ -1566,10 +1551,6 @@ async function handleNewMessageInsert(newMessage) {
     // FIXED: Insert in correct chronological position
     const insertIndex = findCorrectInsertionIndex(newMessage);
     messages.splice(insertIndex, 0, newMessage);
-    
-    // DEBUG: Show real-time insertion position
-    const time = new Date(newMessage.timestamp).toLocaleTimeString();
-    console.log(`📨 REAL-TIME INSERT: ${time} - ${newMessage.sender} at position ${insertIndex}/${messages.length}`);
     
     // Validate order after insertion (skip DOM rebuild since we're building it here)
     validateAndFixMessageOrder(true);
@@ -1605,11 +1586,9 @@ async function handleMessageUpdate(updatedMessage) {
     // Find message element in DOM
     const messageElement = document.querySelector(`[data-message-id="${updatedMessage.id}"]`);
     if (!messageElement) {
-        console.warn(`⚠️ Message element not found for update: ${updatedMessage.id}`);
+        console.warn(`Message element not found for update: ${updatedMessage.id}`);
         return;
     }
-    
-    console.log(`🔄 REAL-TIME UPDATE: ${updatedMessage.sender} - message ${updatedMessage.id}`);
     
     // Update message content (especially important for image additions)
     await updateMessageContent(messageElement, updatedMessage);
@@ -1630,7 +1609,6 @@ async function createMessageElementWithImageHandling(message) {
             // Handle image load success
             imageElement.onload = function() {
                 this.style.opacity = '1';
-                console.log(`✅ Real-time image loaded: ${message.sender}`);
             };
             
             // Handle image load error
@@ -1649,18 +1627,14 @@ async function createMessageElementWithImageHandling(message) {
 
 // Display message optimistically (immediately when sending)
 async function displayMessageOptimistically(message) {
-    console.log('🚀 DISPLAYING MESSAGE OPTIMISTICALLY:', message);
-    
     // Check if message already exists (prevent duplicates)
     if (messages.some(m => m.id === message.id)) {
-        console.log('⚠️ Message already exists, skipping optimistic display');
         return;
     }
     
     // Add to messages array in correct chronological position
     const insertIndex = findCorrectInsertionIndex(message);
     messages.splice(insertIndex, 0, message);
-    console.log(`📍 Inserted optimistic message at position ${insertIndex}/${messages.length}`);
     
     // Create message element with optimistic flag
     const messageElement = await createMessageElementWithImageHandling(message);
@@ -1679,8 +1653,6 @@ async function displayMessageOptimistically(message) {
     if (insertIndex === messages.length - 1) {
         scrollToBottom();
     }
-    
-    console.log('✅ Optimistic message displayed successfully');
 }
 
 // Update existing message content (for UPDATE events)
@@ -1728,14 +1700,13 @@ async function updateMessageContent(messageElement, updatedMessage) {
     const existingContent = messageElement.querySelector('.content, .message-content-with-image, .message-image-container');
     if (existingContent) {
         existingContent.outerHTML = contentHtml;
-        console.log(`🔄 Updated content for message ${updatedMessage.id}`);
         
         // Add error handling for the new image if it exists
         if (hasImage) {
             const newImageElement = messageElement.querySelector('.message-image');
             if (newImageElement) {
                 newImageElement.onerror = function() {
-                    console.warn(`❌ Updated image failed to load: ${updatedMessage.image_url}`);
+                    console.warn(`Updated image failed to load: ${updatedMessage.image_url}`);
                     this.style.opacity = '1';
                     this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OSI+SW1hZ2UgZmFpbGVkPC90ZXh0Pjwvc3ZnPg==';
                     this.alt = 'Failed to load image';
@@ -1828,18 +1799,12 @@ async function applyRealTimeEnhancements(messageElement, messageData) {
 // Image handling functions
 function handleImageSelect(event) {
     const file = event.target.files[0];
-    console.log('📁 IMAGE FILE SELECTED:', file);
     
     if (file) {
         if (validateImageFile(file)) {
             displayImagePreview(file);
             selectedImageFile = file;
-            console.log('✅ selectedImageFile set to:', selectedImageFile);
-        } else {
-            console.log('❌ Image validation failed');
         }
-    } else {
-        console.log('❌ No file selected');
     }
 }
 
@@ -1858,21 +1823,14 @@ function handleImageDrop(event) {
     inputArea.classList.remove('drag-over');
     
     const files = event.dataTransfer.files;
-    console.log('🎯 IMAGE DROPPED:', files);
     
     if (files.length > 0) {
         const file = files[0];
-        console.log('📁 Processing dropped file:', file);
         
         if (validateImageFile(file)) {
             displayImagePreview(file);
             selectedImageFile = file;
-            console.log('✅ selectedImageFile set from drop:', selectedImageFile);
-        } else {
-            console.log('❌ Dropped file validation failed');
         }
-    } else {
-        console.log('❌ No files in drop event');
     }
 }
 
@@ -1895,32 +1853,21 @@ function validateImageFile(file) {
 }
 
 function displayImagePreview(file) {
-    console.log('📷 DISPLAYING IMAGE PREVIEW');
-    console.log(`  📁 File:`, file);
-    console.log(`  📊 Size: ${file.size} bytes`);
-    console.log(`  🏷️ Name: ${file.name}`);
-    
     const reader = new FileReader();
     reader.onload = function(e) {
         imagePreview.src = e.target.result;
         imagePreviewContainer.style.display = 'block';
         messageInput.placeholder = 'Add a caption (optional)...';
-        console.log('✅ Image preview displayed successfully');
     };
     reader.readAsDataURL(file);
 }
 
 function clearImagePreview() {
-    console.log('🗑️ CLEARING IMAGE PREVIEW');
-    console.log(`  📁 Before clear - selectedImageFile:`, selectedImageFile);
-    
     imagePreviewContainer.style.display = 'none';
     imagePreview.src = '';
     selectedImageFile = null;
     imageFileInput.value = '';
     messageInput.placeholder = 'Type a message...';
-    
-    console.log(`  ✅ After clear - selectedImageFile:`, selectedImageFile);
 }
 
 async function uploadImageToSupabase(file) {
@@ -1948,18 +1895,8 @@ async function uploadImageToSupabase(file) {
 }
 
 async function sendMessage(content) {
-    // Enhanced debugging for image sending
-    console.log('🚀 SEND MESSAGE called:');
-    console.log(`  📝 Content: "${content}"`);
-    console.log(`  📷 selectedImageFile:`, selectedImageFile);
-    console.log(`  🏠 currentRoom: ${currentRoom}`);
-    console.log(`  👤 currentUser: ${currentUser}`);
-    
     if (!currentRoom || !currentUser || (!content && !selectedImageFile)) {
-        console.log('❌ SEND BLOCKED: Missing requirements');
-        console.log(`  - Room: ${!currentRoom ? '❌' : '✅'}`);
-        console.log(`  - User: ${!currentUser ? '❌' : '✅'}`);
-        console.log(`  - Content or Image: ${(!content && !selectedImageFile) ? '❌' : '✅'}`);
+        console.error('Send blocked: Missing room, user, or content');
         return;
     }
     
@@ -1968,13 +1905,11 @@ async function sendMessage(content) {
         
         // Convert image to base64 if selected
         if (selectedImageFile) {
-            console.log(`📷 Processing image: ${selectedImageFile.name}, size: ${selectedImageFile.size} bytes`);
             imageUrl = await uploadImageToSupabase(selectedImageFile);
             if (!imageUrl) {
-                console.log('❌ Image processing failed, aborting send');
+                console.error('Image processing failed, aborting send');
                 return; // Image processing failed, don't send message
             }
-            console.log('✅ Image processed successfully');
         }
         
         // Create message object with status
@@ -2000,8 +1935,6 @@ async function sendMessage(content) {
         
         if (error) throw error;
         
-        console.log('✅ Message sent to database:', data[0]);
-        
         // 🔥 OPTIMISTIC UI: Display message immediately instead of waiting for subscription
         const sentMessage = data[0]; // Get the message with database ID
         await displayMessageOptimistically(sentMessage);
@@ -2016,7 +1949,6 @@ async function sendMessage(content) {
                 const optimisticElement = document.querySelector(`[data-message-id="${messageId}"].optimistic`);
                 if (optimisticElement) {
                     optimisticElement.remove();
-                    console.log('🔄 Replaced optimistic message with real-time version');
                 }
             } else {
                 // Real-time subscription failed, enhance the optimistic message
@@ -2024,7 +1956,6 @@ async function sendMessage(content) {
                 if (optimisticElement) {
                     optimisticElement.classList.remove('optimistic');
                     applyRealTimeEnhancements(optimisticElement, sentMessage);
-                    console.log('🔧 Enhanced optimistic message (subscription failed)');
                 }
             }
         }, 2000);
@@ -2042,7 +1973,6 @@ async function sendMessage(content) {
         // Clear input and image preview immediately
         messageInput.value = '';
         clearImagePreview();
-        console.log('📷 Image preview cleared after successful send');
         
         // Update delivery status for other users (if function exists)
         if (window.updateMessageDeliveryStatus) {
