@@ -453,4 +453,4 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initDeleteSystem);
 } else {
     initDeleteSystem();
-} 
+}

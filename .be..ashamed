@@ -296,7 +296,7 @@ PHASE 2: FIX CORE FUNCTIONALITY
 -------------------------------
 GOAL: Restore basic features that worked before
 
-Step 2.1: Fix message timestamp sorting 
+Step 2.1: Fix message timestamp sorting
 - Ensure .order('timestamp', { ascending: false }) in loadMessages()
 - Fix .reverse() calls that might be breaking order
 - Ensure real-time messages insert in correct chronological position

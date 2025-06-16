@@ -2,6 +2,100 @@
 const PROFILE_KEY = 'msg_user_profile';
 let selectedColor = '#ffffff';
 
+// Profile cache for bulk loading optimization
+const profileCache = new Map();
+const PROFILE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Bulk load multiple user profiles in a single database query (OPTIMIZATION)
+async function getUserProfilesBulk(usernames) {
+    if (!usernames || usernames.length === 0) return {};
+    
+    const result = {};
+    const uncachedUsernames = [];
+    const now = Date.now();
+    
+    // Check cache first
+    usernames.forEach(username => {
+        const cached = profileCache.get(username);
+        if (cached && (now - cached.timestamp) < PROFILE_CACHE_DURATION) {
+            result[username] = cached.profile;
+        } else {
+            uncachedUsernames.push(username);
+        }
+    });
+    
+    // Load uncached profiles from database in bulk
+    if (uncachedUsernames.length > 0) {
+        try {
+            // Single database query for all uncached profiles
+            const { data, error } = await window.supabaseClient
+                .from('profile_items')
+                .select('*')
+                .in('username', uncachedUsernames);
+            
+            if (error) {
+                console.error('Error getting bulk user profiles:', error);
+            }
+            
+            // Process results and fill cache
+            const profileMap = new Map(data ? data.map(p => [p.username, p]) : []);
+            
+            // Get VIP statuses in bulk if available
+            let vipStatuses = {};
+            if (window.checkVIPStatusBulk) {
+                vipStatuses = await window.checkVIPStatusBulk(uncachedUsernames);
+            } else if (window.checkVIPStatus) {
+                // Fallback to individual VIP checks (still parallel)
+                const vipPromises = uncachedUsernames.map(async username => ({
+                    username,
+                    isVIP: await window.checkVIPStatus(username)
+                }));
+                const vipResults = await Promise.all(vipPromises);
+                vipStatuses = Object.fromEntries(vipResults.map(v => [v.username, v.isVIP]));
+            }
+            
+            // Build profiles for uncached usernames
+            uncachedUsernames.forEach(username => {
+                const dbProfile = profileMap.get(username);
+                const profile = {
+                    color: dbProfile?.name_color || '#ffffff',
+                    image: dbProfile?.profile_picture || null,
+                    isVIP: vipStatuses[username] || false
+                };
+                
+                // Cache the profile
+                profileCache.set(username, {
+                    profile,
+                    timestamp: now
+                });
+                
+                result[username] = profile;
+            });
+            
+        } catch (err) {
+            console.error('Failed to get bulk user profiles:', err);
+            // Fallback: default profiles for failed usernames
+            uncachedUsernames.forEach(username => {
+                const profile = { color: '#ffffff', image: null, isVIP: false };
+                profileCache.set(username, { profile, timestamp: now });
+                result[username] = profile;
+            });
+        }
+    }
+    
+    return result;
+}
+
+// Clear profile cache for a specific user (for real-time updates)
+function invalidateProfileCache(username) {
+    profileCache.delete(username);
+}
+
+// Clear all cached profiles
+function clearProfileCache() {
+    profileCache.clear();
+}
+
 // Load profile data from Supabase
 async function loadProfile() {
     const username = window.currentUser || localStorage.getItem('msg_username');
@@ -142,6 +236,9 @@ async function saveProfile() {
             console.error('Error saving profile:', result.error);
             alert('Failed to save profile: ' + result.error.message);
         } else {
+            // Invalidate cache for this user to force refresh
+            invalidateProfileCache(username);
+            
             // Also save to localStorage as backup
             localStorage.setItem(PROFILE_KEY, JSON.stringify({
                 image: profileData.profile_picture,
@@ -156,12 +253,19 @@ async function saveProfile() {
     }
 }
 
-// Get user profile from Supabase
+// Get user profile from Supabase (optimized with cache)
 async function getUserProfile(username) {
     if (!username) return { color: '#ffffff' };
     
+    // Check cache first
+    const cached = profileCache.get(username);
+    const now = Date.now();
+    if (cached && (now - cached.timestamp) < PROFILE_CACHE_DURATION) {
+        return cached.profile;
+    }
+    
     try {
-        // First check Supabase
+        // Load from database if not cached
         const { data, error } = await window.supabaseClient
             .from('profile_items')
             .select('*')
@@ -182,6 +286,12 @@ async function getUserProfile(username) {
             profileData.isVIP = await window.checkVIPStatus(username);
         }
         
+        // Cache the result
+        profileCache.set(username, {
+            profile: profileData,
+            timestamp: now
+        });
+        
         return profileData;
     } catch (err) {
         console.error('Failed to get user profile:', err);
@@ -195,9 +305,23 @@ async function getUserProfile(username) {
                 profileData.isVIP = await window.checkVIPStatus(username);
             }
             
+            // Cache the fallback result
+            profileCache.set(username, {
+                profile: profileData,
+                timestamp: now
+            });
+            
             return profileData;
         }
-        return { color: '#ffffff' };
+        
+        // Default profile for unknown users
+        const defaultProfile = { color: '#ffffff', image: null, isVIP: false };
+        profileCache.set(username, {
+            profile: defaultProfile,
+            timestamp: now
+        });
+        
+        return defaultProfile;
     }
 }
 
@@ -338,4 +462,7 @@ async function initProfile() {
 
 // Export functions
 window.initProfile = initProfile;
-window.getUserProfile = getUserProfile; 
+window.getUserProfile = getUserProfile;
+window.getUserProfilesBulk = getUserProfilesBulk;
+window.invalidateProfileCache = invalidateProfileCache;
+window.clearProfileCache = clearProfileCache; 

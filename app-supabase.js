@@ -669,27 +669,36 @@ async function loadMessages(roomCode) {
             });
             parallelOperations.push(messageElementsPromise);
             
-            // 2. Load all profiles in parallel (while DOM elements are being built)
+            // 2. Load all profiles in BULK (single database query!)
             const uniqueSenders = [...new Set(messages.map(m => m.sender))];
-            const profilesPromise = Promise.all(
-                uniqueSenders.map(sender => window.getUserProfile(sender))
-            ).then(profilesArray => {
-                const profileCache = {};
-                uniqueSenders.forEach((sender, index) => {
-                    profileCache[sender] = profilesArray[index];
-                });
-                return profileCache;
-            });
+            const profilesPromise = window.getUserProfilesBulk ? 
+                window.getUserProfilesBulk(uniqueSenders) :
+                // Fallback to individual loading if bulk function not available
+                Promise.all(uniqueSenders.map(sender => window.getUserProfile(sender)))
+                    .then(profilesArray => {
+                        const profileCache = {};
+                        uniqueSenders.forEach((sender, index) => {
+                            profileCache[sender] = profilesArray[index];
+                        });
+                        return profileCache;
+                    });
             parallelOperations.push(profilesPromise);
             
-            // 3. Initialize presence system in parallel
+            // 3. Load all reaction data in parallel
+            const messageIds = messages.map(m => m.id);
+            const reactionsPromise = window.loadReactionDataBulk ? 
+                window.loadReactionDataBulk(messageIds) : 
+                Promise.resolve({});
+            parallelOperations.push(reactionsPromise);
+            
+            // 4. Initialize presence system in parallel
             const presencePromise = window.initRoomPresence ? 
                 Promise.resolve(window.initRoomPresence(roomCode, currentUser)) : 
                 Promise.resolve();
             parallelOperations.push(presencePromise);
             
             // Wait for all parallel operations to complete
-            const [messageElements, profileCache] = await Promise.all(parallelOperations);
+            const [messageElements, profileCache, reactionData] = await Promise.all(parallelOperations);
             
             // Add all messages to DOM at once
             messagesContainer.appendChild(messageFragment);
@@ -697,7 +706,7 @@ async function loadMessages(roomCode) {
             // Apply ALL enhancements immediately in parallel
             await Promise.all([
                 applyProfileEnhancementsToAllMessages(messageElements, profileCache),
-                applyReactionEnhancementsToAllMessages(messageElements),
+                applyReactionEnhancementsToAllMessages(messageElements, reactionData),
                 loadReplyPreviewsForAllMessages(messageElements)
             ]);
             
@@ -901,7 +910,7 @@ async function applyProfileEnhancementsToAllMessages(messageElements, profileCac
 }
 
 // Apply reaction enhancements to all messages at once (parallel loading)
-async function applyReactionEnhancementsToAllMessages(messageElements) {
+async function applyReactionEnhancementsToAllMessages(messageElements, reactionData = {}) {
     await Promise.all(messageElements.map(async (messageElement) => {
         const messageId = messageElement.dataset.messageId;
         const messageData = messages.find(m => m.id === messageId);
@@ -933,8 +942,11 @@ async function applyReactionEnhancementsToAllMessages(messageElements) {
         }
     }));
     
-    // Load actual reactions for all messages at once
-    if (window.loadAllReactions) {
+    // Apply reaction displays using pre-loaded data (MUCH FASTER!)
+    if (window.applyReactionDisplaysToAllMessages && Object.keys(reactionData).length > 0) {
+        window.applyReactionDisplaysToAllMessages(messageElements, reactionData);
+    } else if (window.loadAllReactions) {
+        // Fallback for compatibility
         window.loadAllReactions();
     }
 }
@@ -961,15 +973,19 @@ async function loadProfileEnhancements() {
         const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
         const uniqueSenders = [...new Set(messageElements.map(el => el.dataset.sender))];
         
-        // Load all profiles in parallel
-        const profilePromises = uniqueSenders.map(sender => window.getUserProfile(sender));
-        const profilesArray = await Promise.all(profilePromises);
-        
-        // Create profile cache
-        const profileCache = {};
-        uniqueSenders.forEach((sender, index) => {
-            profileCache[sender] = profilesArray[index];
-        });
+        // Load all profiles in BULK (single database query!)
+        let profileCache;
+        if (window.getUserProfilesBulk) {
+            profileCache = await window.getUserProfilesBulk(uniqueSenders);
+        } else {
+            // Fallback to individual loading
+            const profilePromises = uniqueSenders.map(sender => window.getUserProfile(sender));
+            const profilesArray = await Promise.all(profilePromises);
+            profileCache = {};
+            uniqueSenders.forEach((sender, index) => {
+                profileCache[sender] = profilesArray[index];
+            });
+        }
         
         // Apply enhancements using the new parallel function
         await applyProfileEnhancementsToAllMessages(messageElements, profileCache);
@@ -987,8 +1003,8 @@ async function loadReactionEnhancements() {
     try {
         const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
         
-        // Apply enhancements using the new parallel function
-        await applyReactionEnhancementsToAllMessages(messageElements);
+        // Apply enhancements using the new parallel function (no pre-loaded data, will use fallback)
+        await applyReactionEnhancementsToAllMessages(messageElements, {});
         
     } catch (error) {
         console.error('❌ Error loading reaction enhancements:', error);
@@ -1150,16 +1166,20 @@ async function loadProfileEnhancementsForRange(startIndex, count) {
     try {
         const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]')).slice(startIndex, startIndex + count);
         
-        // Pre-load all profile data for this range in parallel
+        // Pre-load all profile data for this range in BULK
         const uniqueSenders = [...new Set(messageElements.map(el => el.dataset.sender))];
-        const profilePromises = uniqueSenders.map(sender => window.getUserProfile(sender));
-        const profilesArray = await Promise.all(profilePromises);
-        
-        // Create profile cache
-        const profileCache = {};
-        uniqueSenders.forEach((sender, index) => {
-            profileCache[sender] = profilesArray[index];
-        });
+        let profileCache;
+        if (window.getUserProfilesBulk) {
+            profileCache = await window.getUserProfilesBulk(uniqueSenders);
+        } else {
+            // Fallback to individual loading
+            const profilePromises = uniqueSenders.map(sender => window.getUserProfile(sender));
+            const profilesArray = await Promise.all(profilePromises);
+            profileCache = {};
+            uniqueSenders.forEach((sender, index) => {
+                profileCache[sender] = profilesArray[index];
+            });
+        }
         
         // Apply profile enhancements in parallel
         await Promise.all(messageElements.map(async (messageElement) => {
@@ -1215,28 +1235,16 @@ async function loadProfileEnhancementsForRange(startIndex, count) {
 async function loadReactionEnhancementsForRange(startIndex, count) {
     try {
         const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]')).slice(startIndex, startIndex + count);
+        const messageIds = messageElements.map(el => el.dataset.messageId);
         
-        // Apply reaction enhancements in parallel
-        await Promise.all(messageElements.map(async (messageElement) => {
-            const messageId = messageElement.dataset.messageId;
-            const messageData = messages.find(m => m.id === messageId);
-            if (!messageData) return;
-            
-            // Add reaction arrow
-            if (window.addReactionArrowToMessage) {
-                window.addReactionArrowToMessage(messageElement, messageId);
-            }
-            
-            // Don't add enhancements to deleted messages
-            const isDeleted = messageData.was_deleted || messageData.content === 'This message was deleted';
-            
-            if (!isDeleted) {
-                // Add delete trash can for own recent messages
-                if (window.addDeleteTrashCan && messageData.sender === currentUser) {
-                    window.addDeleteTrashCan(messageElement, messageData);
-                }
-            }
-        }));
+        // Load reaction data for this range
+        let reactionData = {};
+        if (window.loadReactionDataBulk) {
+            reactionData = await window.loadReactionDataBulk(messageIds);
+        }
+        
+        // Apply reaction enhancements using the new optimized function
+        await applyReactionEnhancementsToAllMessages(messageElements, reactionData);
         
     } catch (error) {
         console.error('❌ Error loading reaction enhancements for range:', error);

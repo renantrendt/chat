@@ -798,6 +798,48 @@ async function loadAllReactions() {
     }
 }
 
+// BULK load reaction data for multiple message IDs (OPTIMIZATION for parallel loading)
+async function loadReactionDataBulk(messageIds) {
+    if (!messageIds || messageIds.length === 0) return {};
+    
+    try {
+        // Load reactions for all specified messages in a single query
+        const { data: reactions, error } = await window.supabaseClient
+            .from('reactions')
+            .select('*')
+            .in('message_id', messageIds);
+        
+        if (error) throw error;
+        
+        // Group reactions by message ID
+        const reactionsByMessage = {};
+        if (reactions) {
+            reactions.forEach(reaction => {
+                if (!reactionsByMessage[reaction.message_id]) {
+                    reactionsByMessage[reaction.message_id] = [];
+                }
+                reactionsByMessage[reaction.message_id].push(reaction);
+            });
+        }
+        
+        return reactionsByMessage;
+        
+    } catch (error) {
+        console.error('Error loading bulk reaction data:', error);
+        return {};
+    }
+}
+
+// Apply reaction displays using pre-loaded data (OPTIMIZATION)
+function applyReactionDisplaysToAllMessages(messageElements, reactionData) {
+    messageElements.forEach(messageElement => {
+        const messageId = messageElement.dataset.messageId;
+        if (messageId && reactionData[messageId]) {
+            updateReactionsDisplay(messageId, reactionData[messageId]);
+        }
+    });
+}
+
 // Subscribe to reaction changes
 function subscribeToReactions() {
     if (!window.currentRoom) return;
@@ -1173,6 +1215,8 @@ function testReplySystem() {
 window.initReactionSystem = initReactionSystem;
 window.addReactionArrowToMessage = addReactionArrowToMessage;
 window.loadAllReactions = loadAllReactions;
+window.loadReactionDataBulk = loadReactionDataBulk;
+window.applyReactionDisplaysToAllMessages = applyReactionDisplaysToAllMessages;
 window.subscribeToReactions = subscribeToReactions;
 window.cleanupReactions = cleanupReactions;
 window.hideReactionMenu = hideReactionMenu;
