@@ -56,9 +56,10 @@ async function subscribeToUnreadMessages(roomCode) {
         unreadCounts.set(roomCode, 0);
     }
     
-    // Subscribe to new messages in this room
+    // Subscribe to new messages in this room (use timestamp for unique channel name)
+    const uniqueChannelName = `unread-${roomCode}-${Date.now()}`;
     unreadSubscription = window.supabaseClient
-        .channel(`unread-${roomCode}`)
+        .channel(uniqueChannelName)
         .on(
             'postgres_changes',
             {

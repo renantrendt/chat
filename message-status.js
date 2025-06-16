@@ -177,9 +177,10 @@ async function subscribeToMessageStatus() {
         await window.subscriptionManager.cleanup('message-status');
     }
     
-    // Subscribe to message updates for current room
+    // Subscribe to message updates for current room (use timestamp for unique channel name)
+    const uniqueChannelName = `message-status-${window.currentRoom}-${Date.now()}`;
     messageStatusSubscription = window.supabaseClient
-        .channel(`message-status-${window.currentRoom}`)
+        .channel(uniqueChannelName)
         .on(
             'postgres_changes',
             {

@@ -105,25 +105,36 @@ const subscriptionManager = {
         }
         this.observers.clear();
         
-        // 3. Unsubscribe from all subscriptions in reverse order (LIFO)
+        // 3. Unsubscribe from all subscriptions in reverse order (LIFO)  
         const subscriptionEntries = Array.from(this.subscriptions.entries()).reverse();
         for (const [key, { subscription, type }] of subscriptionEntries) {
             try {
+                console.log(`🧹 Bulk cleaning up ${type}: ${key}`);
                 if (subscription && typeof subscription.unsubscribe === 'function') {
                     await subscription.unsubscribe();
+                    // Give each channel time to fully close
+                    await new Promise(resolve => setTimeout(resolve, 50));
                 } else if (subscription && typeof subscription.untrack === 'function') {
                     // For presence channels
                     subscription.untrack();
                     if (typeof subscription.unsubscribe === 'function') {
                         await subscription.unsubscribe();
+                        await new Promise(resolve => setTimeout(resolve, 50));
                     }
                 }
+                console.log(`✅ Bulk cleanup success: ${key}`);
             } catch (error) {
-                console.error(`Error unsubscribing from ${key}:`, error);
+                console.error(`❌ Error unsubscribing from ${key}:`, error);
                 errors.push(`Subscription ${key}: ${error.message}`);
             }
         }
         this.subscriptions.clear();
+        
+        // Additional cleanup delay to ensure all channels are closed
+        if (subscriptionEntries.length > 0) {
+            console.log('⏳ Waiting for all Supabase channels to fully close...');
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
         
         if (errors.length > 0) {
             console.warn('Cleanup completed with errors:', errors);
@@ -137,14 +148,25 @@ const subscriptionManager = {
         if (this.subscriptions.has(key)) {
             const { subscription, type } = this.subscriptions.get(key);
             try {
-                console.log(`Cleaning up ${type}: ${key}`);
+                console.log(`🧹 Cleaning up ${type}: ${key}`);
                 if (subscription && typeof subscription.unsubscribe === 'function') {
                     await subscription.unsubscribe();
+                    // Give Supabase time to fully close the channel
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                } else if (subscription && typeof subscription.untrack === 'function') {
+                    // For presence channels
+                    subscription.untrack();
+                    if (typeof subscription.unsubscribe === 'function') {
+                        await subscription.unsubscribe();
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
                 }
                 this.subscriptions.delete(key);
+                console.log(`✅ Successfully cleaned up ${key}`);
                 return { success: true };
             } catch (error) {
-                console.error(`Error cleaning up ${key}:`, error);
+                console.error(`❌ Error cleaning up ${key}:`, error);
+                this.subscriptions.delete(key); // Remove anyway to prevent stuck state
                 return { success: false, error: error.message };
             }
         }
@@ -464,6 +486,10 @@ async function joinRoom() {
 async function enterRoom(roomCode) {
     if (!roomCode || !currentUser) return;
     
+    // 🔧 FORCE CLEANUP: Ensure all previous subscriptions are cleared
+    console.log('🧹 Force cleaning all subscriptions before entering room...');
+    await subscriptionManager.cleanupAll();
+    
     // Set current room
     currentRoom = roomCode;
     window.currentRoom = roomCode; // Also set globally
@@ -641,7 +667,7 @@ async function loadMessages(roomCode) {
     messages = [];
     
     try {
-        // Load messages from database
+        // Load messages from database 
         const { data, error } = await window.supabaseClient
             .from('messages')
             .select('*')
@@ -655,18 +681,46 @@ async function loadMessages(roomCode) {
             // Reverse to get chronological order
             messages = [...data.reverse()];
             
+            // VALIDATE AND FIX TIMESTAMP ORDER IMMEDIATELY
+            const orderWasValid = validateAndFixMessageOrder();
+            if (!orderWasValid) {
+                console.warn('🔧 Initial message load had timestamp ordering issues - now fixed!');
+            } else {
+                console.log('✅ Initial message order is correct');
+            }
+            
+            // DEBUG: Show chronological order for verification
+            console.log('📊 MESSAGE LOADING ORDER:');
+            messages.slice(0, 5).forEach((msg, i) => {
+                const time = new Date(msg.timestamp).toLocaleTimeString();
+                console.log(`  ${i}: ${time} - ${msg.sender}: ${msg.content.substring(0, 30)}...`);
+            });
+            if (messages.length > 5) {
+                console.log(`  ... and ${messages.length - 5} more messages`);
+            }
+            
             // ===== TRUE PARALLEL LOADING - NO DELAYS =====
             // Start ALL operations simultaneously
             const parallelOperations = [];
             
-            // 1. Build all message DOM elements in parallel
+            // 1. Build ALL message DOM elements SYNCHRONOUSLY to preserve exact chronological order
             const messageFragment = document.createDocumentFragment();
-            const messageElementsPromise = Promise.all(
-                messages.map(message => displayMessageFastToFragment(message))
-            ).then(messageElements => {
-                messageElements.forEach(element => messageFragment.appendChild(element));
-                return messageElements;
+            const syncMessageElements = [];
+            
+            // COMPLETELY SYNCHRONOUS DOM BUILDING - no async at all!
+            messages.forEach((message, index) => {
+                const element = createMessageElementSync(message);
+                messageFragment.appendChild(element);
+                syncMessageElements.push(element);
+                
+                // Debug every message to catch ordering issues
+                if (index < 10) {
+                    const time = new Date(message.timestamp).toLocaleTimeString();
+                    console.log(`🔧 DOM BUILD ${index}: ${time} - ${message.sender}`);
+                }
             });
+            
+            const messageElementsPromise = Promise.resolve(syncMessageElements);
             parallelOperations.push(messageElementsPromise);
             
             // 2. Load all profiles in BULK (single database query!)
@@ -703,6 +757,59 @@ async function loadMessages(roomCode) {
             // Add all messages to DOM at once
             messagesContainer.appendChild(messageFragment);
             
+            // DEBUG: Verify DOM order matches array order
+            console.log(`🔍 VERIFYING DOM vs ARRAY ORDER (checking ALL ${messages.length} messages):`);
+            const domElements = Array.from(messagesContainer.querySelectorAll('.message[data-message-id]'));
+            let domOrderCorrect = true;
+            let firstError = -1;
+            
+            console.log(`📊 Total messages to verify: ${messages.length}, DOM elements found: ${domElements.length}`);
+            
+            for (let i = 0; i < Math.min(domElements.length, messages.length); i++) {
+                const domMessageId = domElements[i].dataset.messageId;
+                const arrayMessage = messages[i];
+                if (arrayMessage && domMessageId !== arrayMessage.id) {
+                    domOrderCorrect = false;
+                    if (firstError === -1) firstError = i;
+                    if (i < 15) { // Show first 15 errors
+                        console.log(`❌ Position ${i}: DOM has ${domMessageId} but array has ${arrayMessage.id}`);
+                    }
+                } else if (arrayMessage && i < 10) {
+                    const time = new Date(arrayMessage.timestamp).toLocaleTimeString();
+                    console.log(`✅ Position ${i}: ${time} - ${arrayMessage.sender}`);
+                }
+            }
+            
+            if (!domOrderCorrect && firstError !== -1) {
+                console.log(`🚨 FIRST ERROR AT POSITION ${firstError} - this is where ordering breaks!`);
+            }
+            
+            console.log(domOrderCorrect ? '✅ DOM order matches array PERFECTLY!' : `❌ DOM order is WRONG! First error at position ${firstError}`);
+            
+            // AUTO-UPDATE: Apply new relative date timestamps to existing messages
+            console.log('🔄 Auto-updating timestamps with relative dates...');
+            setTimeout(() => {
+                window.refreshAllTimestamps();
+            }, 1000);
+            
+            // If DOM order is wrong, show detailed comparison
+            if (!domOrderCorrect) {
+                console.log('🔍 DETAILED DOM vs ARRAY COMPARISON:');
+                console.log('Array order:');
+                messages.slice(0, 10).forEach((msg, i) => {
+                    const time = new Date(msg.timestamp).toLocaleTimeString();
+                    console.log(`  ${i}: ${time} - ${msg.sender} - ID: ${msg.id}`);
+                });
+                console.log('DOM order:');
+                domElements.slice(0, 10).forEach((el, i) => {
+                    const msg = messages.find(m => m.id === el.dataset.messageId);
+                    if (msg) {
+                        const time = new Date(msg.timestamp).toLocaleTimeString();
+                        console.log(`  ${i}: ${time} - ${msg.sender} - ID: ${el.dataset.messageId}`);
+                    }
+                });
+            }
+            
             // Apply ALL enhancements immediately in parallel
             await Promise.all([
                 applyProfileEnhancementsToAllMessages(messageElements, profileCache),
@@ -729,6 +836,16 @@ async function loadMessages(roomCode) {
 
 // Fast message display without blocking operations
 async function displayMessageFast(message) {
+    const messageElement = await createMessageElement(message);
+    
+    // Add to container immediately (appends to end)
+    messagesContainer.appendChild(messageElement);
+    
+    return messageElement;
+}
+
+// Create message element WITHOUT adding to DOM (for precise positioning)
+async function createMessageElement(message) {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message');
     
@@ -800,8 +917,78 @@ async function displayMessageFast(message) {
         messageElement.classList.add('deleted');
     }
     
-    // Add to container immediately
-    messagesContainer.appendChild(messageElement);
+    return messageElement;
+}
+
+// Create message element COMPLETELY SYNCHRONOUSLY (no async operations!)
+function createMessageElementSync(message) {
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message');
+    
+    // Add message ID and sender as data attributes
+    if (message.id) {
+        messageElement.dataset.messageId = message.id;
+    }
+    messageElement.dataset.sender = message.sender;
+    
+    // Add class based on sender
+    if (message.sender === currentUser) {
+        messageElement.classList.add('sent');
+    } else {
+        messageElement.classList.add('received');
+    }
+    
+    // Format timestamp
+    const timestamp = formatMessageTime(message.timestamp);
+    
+    // Check if message was deleted
+    const isDeleted = message.was_deleted || message.content === 'This message was deleted';
+    const contentText = isDeleted ? 'This message was deleted' : message.content;
+    const contentStyle = isDeleted ? 'color: #ff4444; font-style: italic;' : '';
+    
+    // Handle image content
+    const hasImage = message.image_url && !isDeleted;
+    const hasText = contentText && contentText.trim() !== '';
+    
+    let imageHtml = '';
+    if (hasImage) {
+        imageHtml = `
+            <div class="message-image-container">
+                <img src="${message.image_url}" alt="Shared image" class="message-image" onclick="openImageFullscreen('${message.image_url}')">
+            </div>
+        `;
+    }
+    
+    // Create content HTML based on what's available
+    let contentHtml = '';
+    if (hasText && hasImage) {
+        contentHtml = `
+            <div class="message-content-with-image">
+                <div class="message-text-content" style="${contentStyle}">${contentText}</div>
+                ${imageHtml}
+            </div>
+        `;
+    } else if (hasImage) {
+        contentHtml = imageHtml;
+    } else {
+        contentHtml = `<div class="content" style="${contentStyle}">${contentText}</div>`;
+    }
+    
+    // Create message content
+    messageElement.innerHTML = `
+        <div class="message-header">
+            <div class="message-info">
+                <div class="timestamp">${timestamp}</div>
+                <div class="sender" style="color: #ffffff">${message.sender}</div>
+            </div>
+        </div>
+        ${contentHtml}
+    `;
+    
+    // Add deleted class if needed
+    if (isDeleted) {
+        messageElement.classList.add('deleted');
+    }
     
     return messageElement;
 }
@@ -1108,9 +1295,26 @@ window.loadMoreMessages = async function(roomCode) {
         
         if (data && data.length > 0) {
             
-            // Reverse to get chronological order and prepend to messages
-            const olderMessages = data.reverse();
-            messages.unshift(...olderMessages);
+            // FIXED: Proper chronological order insertion
+            const olderMessages = data.reverse(); // Now oldest-to-newest
+            
+            // Insert in correct chronological position (NOT just prepend!)
+            let insertIndex = 0;
+            olderMessages.forEach(newMsg => {
+                // Find correct position to maintain chronological order
+                const newTimestamp = new Date(newMsg.timestamp).getTime();
+                
+                while (insertIndex < messages.length && 
+                       new Date(messages[insertIndex].timestamp).getTime() < newTimestamp) {
+                    insertIndex++;
+                }
+                
+                messages.splice(insertIndex, 0, newMsg);
+                insertIndex++; // Next message goes after this one
+            });
+            
+            // Validate final order and fix if needed (skip DOM rebuild since we handle it below)
+            validateAndFixMessageOrder(true);
             
             // Display older messages at the top
             const oldScrollHeight = messagesContainer.scrollHeight;
@@ -1118,12 +1322,12 @@ window.loadMoreMessages = async function(roomCode) {
             // Create document fragment for better performance
             const fragment = document.createDocumentFragment();
             
-            // Display older messages in parallel
+            // Display older messages in chronological order
             const messagePromises = olderMessages.map(message => displayMessageFast(message));
             const messageElements = await Promise.all(messagePromises);
             
-            // Add to fragment in reverse order (oldest first)
-            messageElements.reverse().forEach(element => {
+            // Add to fragment in correct chronological order (oldest first)
+            messageElements.forEach(element => {
                 fragment.appendChild(element);
             });
             
@@ -1264,9 +1468,10 @@ function subscribeToMessages(roomCode) {
     // Clean up any existing subscription
     subscriptionManager.cleanup('messages');
     
-    // Subscribe to real-time updates for this room
+    // Subscribe to real-time updates for this room (use timestamp for unique channel name)
+    const uniqueChannelName = `messages-${roomCode}-${Date.now()}`;
     messageSubscription = window.supabaseClient
-        .channel(`messages_channel_${roomCode}`)
+        .channel(uniqueChannelName)
         .on('postgres_changes', 
             { 
                 event: 'INSERT', 
@@ -1284,74 +1489,105 @@ function subscribeToMessages(roomCode) {
                 
                 // Only process if it's not already in our messages array
                 if (!messages.some(m => m.id === newMessage.id)) {
-                    // Just append new messages (they should be newest)
-                    messages.push(newMessage);
+                    // FIXED: Insert in correct chronological position
+                    const insertIndex = findCorrectInsertionIndex(newMessage);
+                    messages.splice(insertIndex, 0, newMessage);
                     
-                    // Use FAST display for immediate appearance
-                    const messageElement = await displayMessageFast(newMessage);
-                    scrollToBottom();
+                    // DEBUG: Show real-time insertion position
+                    const time = new Date(newMessage.timestamp).toLocaleTimeString();
+                    console.log(`📨 REAL-TIME INSERT: ${time} - ${newMessage.sender} at position ${insertIndex}/${messages.length}`);
                     
-                    // PARALLEL LOADING for real-time messages - no delays!
+                    // Validate order after insertion (skip DOM rebuild since we're building it here)
+                    const orderValid = validateAndFixMessageOrder(true);
+                    
+                    // CREATE message element WITHOUT adding to DOM yet
+                    const messageElement = await createMessageElement(newMessage);
+                    
+                    // INSERT at correct DOM position to match array position
+                    insertMessageElementAtCorrectPosition(messageElement, insertIndex);
+                    
+                    // Only scroll to bottom if this is the newest message
+                    if (insertIndex === messages.length - 1) {
+                        scrollToBottom();
+                    }
+                    
+                    // TRUE PARALLEL LOADING for real-time messages - NO WATERFALL!
                     const messageId = newMessage.id;
                     const sender = newMessage.sender;
                     
-                    // Apply ALL enhancements immediately in parallel
-                    const profile = await window.getUserProfile(sender);
-                    
-                    // Apply profile enhancements immediately
-                    if (profile) {
-                        const senderElement = messageElement.querySelector('.sender');
-                        if (senderElement) {
-                            senderElement.style.color = profile.color;
-                            if (profile.isVIP) {
-                                senderElement.classList.add('vip-user');
-                            }
-                        }
+                    // ===== LOAD ALL DATA IN PARALLEL =====
+                    const parallelData = await Promise.all([
+                        // 1. Load profile data
+                        window.getUserProfile(sender),
                         
-                        // Add profile image
-                        if (profile.image) {
-                            const messageHeader = messageElement.querySelector('.message-header');
-                            if (messageHeader && !messageHeader.querySelector('.message-profile-img')) {
-                                const profileImg = document.createElement('img');
-                                profileImg.src = profile.image;
-                                profileImg.alt = sender;
-                                profileImg.className = 'message-profile-img';
-                                messageHeader.insertBefore(profileImg, messageHeader.firstChild);
-                            }
-                        }
-                    }
-                    
-                    // Apply reaction and reply enhancements immediately
-                    await Promise.all([
-                        // Add reaction arrow
-                        window.addReactionArrowToMessage ? 
-                            Promise.resolve(window.addReactionArrowToMessage(messageElement, messageId)) : 
-                            Promise.resolve(),
+                        // 2. Load reaction data for this message (if it has any)
+                        window.loadReactionDataBulk ? 
+                            window.loadReactionDataBulk([messageId]) : 
+                            Promise.resolve({}),
                         
-                        // Add reply preview if needed
+                        // 3. Load reply preview if needed
                         newMessage.reply_to_message_id ? 
-                            createReplyPreviewForMessage(newMessage.reply_to_message_id).then(replyPreviewHtml => {
-                                if (replyPreviewHtml) {
-                                    messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml);
-                                }
-                            }) : 
-                            Promise.resolve()
+                            createReplyPreviewForMessage(newMessage.reply_to_message_id) : 
+                            Promise.resolve('')
                     ]);
                     
-                    // Add other enhancements for own messages
-                    if (newMessage.sender === currentUser) {
-                        if (window.addDeleteTrashCan && !(newMessage.was_deleted || newMessage.content === 'This message was deleted')) {
-                            window.addDeleteTrashCan(messageElement, newMessage);
-                        }
-                        if (newMessage.status && window.addMessageStatus) {
-                            window.addMessageStatus(messageElement, newMessage.status);
-                        }
-                    }
+                    const [profile, reactionData, replyPreviewHtml] = parallelData;
                     
-                    // Add visibility observer for read status
-                    if (window.visibilityObserver && newMessage.sender !== currentUser) {
-                        window.visibilityObserver.observe(messageElement);
-                    }
+                    // ===== APPLY ALL ENHANCEMENTS SIMULTANEOUSLY =====
+                    await Promise.all([
+                        // Apply profile enhancements
+                        profile ? Promise.resolve().then(() => {
+                            const senderElement = messageElement.querySelector('.sender');
+                            if (senderElement) {
+                                senderElement.style.color = profile.color;
+                                if (profile.isVIP) {
+                                    senderElement.classList.add('vip-user');
+                                }
+                            }
+                            
+                            // Add profile image
+                            if (profile.image) {
+                                const messageHeader = messageElement.querySelector('.message-header');
+                                if (messageHeader && !messageHeader.querySelector('.message-profile-img')) {
+                                    const profileImg = document.createElement('img');
+                                    profileImg.src = profile.image;
+                                    profileImg.alt = sender;
+                                    profileImg.className = 'message-profile-img';
+                                    messageHeader.insertBefore(profileImg, messageHeader.firstChild);
+                                }
+                            }
+                        }) : Promise.resolve(),
+                        
+                        // Add reaction arrow and apply reaction data
+                        window.addReactionArrowToMessage ? 
+                            Promise.resolve(window.addReactionArrowToMessage(messageElement, messageId)).then(() => {
+                                // Apply reaction displays if we have data
+                                if (window.applyReactionDisplaysToAllMessages && reactionData[messageId]) {
+                                    window.applyReactionDisplaysToAllMessages([messageElement], reactionData);
+                                }
+                            }) : 
+                            Promise.resolve(),
+                        
+                        // Add reply preview if we have one
+                        replyPreviewHtml ? 
+                            Promise.resolve(messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml)) : 
+                            Promise.resolve(),
+                        
+                        // Add other enhancements for own messages
+                        newMessage.sender === currentUser ? Promise.resolve().then(() => {
+                            if (window.addDeleteTrashCan && !(newMessage.was_deleted || newMessage.content === 'This message was deleted')) {
+                                window.addDeleteTrashCan(messageElement, newMessage);
+                            }
+                            if (newMessage.status && window.addMessageStatus) {
+                                window.addMessageStatus(messageElement, newMessage.status);
+                            }
+                        }) : Promise.resolve(),
+                        
+                        // Add visibility observer for read status
+                        newMessage.sender !== currentUser && window.visibilityObserver ? 
+                            Promise.resolve(window.visibilityObserver.observe(messageElement)) : 
+                            Promise.resolve()
+                    ]);
                 }
             }
         )
@@ -1731,18 +1967,497 @@ function openImageFullscreen(imageUrl) {
 // Make function globally accessible
 window.openImageFullscreen = openImageFullscreen;
 
-// Format timestamp for display
+// Format timestamp for display with relative dates
 function formatMessageTime(timestamp) {
     if (!timestamp) return '';
     
     const date = new Date(timestamp);
+    const now = new Date();
     
     // Format time as HH:MM (24-hour format)
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
+    const timeString = `${hours}:${minutes}`;
     
-    return `${hours}:${minutes}`;
+    // Calculate time difference
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffWeeks = Math.floor(diffDays / 7);
+    const diffMonths = Math.floor(diffDays / 30);
+    
+    // Get relative date string
+    let relativeDate = '';
+    
+    if (diffDays === 0) {
+        // Today - just show time
+        relativeDate = '';
+    } else if (diffDays === 1) {
+        relativeDate = 'Yesterday';
+    } else if (diffDays === 2) {
+        relativeDate = '2 days ago';
+    } else if (diffDays < 7) {
+        relativeDate = `${diffDays} days ago`;
+    } else if (diffWeeks === 1) {
+        relativeDate = 'Last week';
+    } else if (diffWeeks < 4) {
+        relativeDate = `${diffWeeks} weeks ago`;
+    } else if (diffMonths === 1) {
+        relativeDate = 'Last month';
+    } else if (diffMonths < 12) {
+        relativeDate = `${diffMonths} months ago`;
+    } else {
+        // More than a year ago, show actual date
+        relativeDate = date.toLocaleDateString();
+    }
+    
+    // Combine time and relative date
+    if (relativeDate) {
+        return `${timeString} (${relativeDate})`;
+    } else {
+        return timeString; // Today's messages just show time
+    }
 }
+
+// TIMESTAMP ORDER VALIDATION & FIXING (CRITICAL FOR MAIN 0 ISSUE)
+function validateAndFixMessageOrder(skipDOMRebuild = false) {
+    if (messages.length <= 1) return true;
+    
+    let isCorrectOrder = true;
+    const violations = [];
+    
+    // Check chronological order (oldest to newest)
+    for (let i = 0; i < messages.length - 1; i++) {
+        const currentTime = new Date(messages[i].timestamp).getTime();
+        const nextTime = new Date(messages[i + 1].timestamp).getTime();
+        
+        if (currentTime > nextTime) {
+            isCorrectOrder = false;
+            violations.push({
+                index: i,
+                current: messages[i].timestamp,
+                next: messages[i + 1].timestamp,
+                currentSender: messages[i].sender,
+                nextSender: messages[i + 1].sender
+            });
+        }
+    }
+    
+    if (!isCorrectOrder) {
+        console.warn('🔧 TIMESTAMP ORDER VIOLATION DETECTED! Fixing chronological order...');
+        console.warn('📊 Violations found:', violations);
+        
+        // Sort messages by timestamp (oldest to newest)
+        messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Rebuild DOM to match corrected order (unless we're already rebuilding)
+        if (!skipDOMRebuild) {
+            rebuildMessagesDOM();
+        }
+        
+        console.warn('✅ Message order fixed' + (skipDOMRebuild ? '' : ' and DOM rebuilt'));
+        return false; // Order was corrected
+    }
+    
+    return true; // Order was already correct
+}
+
+// Check if real-time message should be inserted in chronological order
+function findCorrectInsertionIndex(newMessage) {
+    const newTimestamp = new Date(newMessage.timestamp).getTime();
+    
+    // Find the correct position to maintain chronological order
+    for (let i = messages.length - 1; i >= 0; i--) {
+        const existingTimestamp = new Date(messages[i].timestamp).getTime();
+        
+        if (existingTimestamp <= newTimestamp) {
+            return i + 1; // Insert after this message
+        }
+    }
+    
+    return 0; // Insert at the beginning (oldest message)
+}
+
+// Rebuild entire message DOM to match the corrected message array order
+function rebuildMessagesDOM() {
+    // Clear container
+    messagesContainer.innerHTML = '';
+    
+    // Sort messages again to ensure correct order (but don't trigger DOM rebuild)
+    messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    // Rebuild all messages in correct order
+    const fragment = document.createDocumentFragment();
+    
+    messages.forEach(message => {
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message');
+        
+        // Add message ID and sender as data attributes
+        if (message.id) {
+            messageElement.dataset.messageId = message.id;
+        }
+        messageElement.dataset.sender = message.sender;
+        
+        // Add class based on sender
+        if (message.sender === currentUser) {
+            messageElement.classList.add('sent');
+        } else {
+            messageElement.classList.add('received');
+        }
+        
+        // Format timestamp
+        const timestamp = formatMessageTime(message.timestamp);
+        
+        // Check if message was deleted
+        const isDeleted = message.was_deleted || message.content === 'This message was deleted';
+        const contentText = isDeleted ? 'This message was deleted' : message.content;
+        const contentStyle = isDeleted ? 'color: #ff4444; font-style: italic;' : '';
+        
+        // Handle image content
+        const hasImage = message.image_url && !isDeleted;
+        const hasText = contentText && contentText.trim() !== '';
+        
+        let imageHtml = '';
+        if (hasImage) {
+            imageHtml = `
+                <div class="message-image-container">
+                    <img src="${message.image_url}" alt="Shared image" class="message-image" onclick="openImageFullscreen('${message.image_url}')">
+                </div>
+            `;
+        }
+        
+        // Create content HTML based on what's available
+        let contentHtml = '';
+        if (hasText && hasImage) {
+            contentHtml = `
+                <div class="message-content-with-image">
+                    <div class="message-text-content" style="${contentStyle}">${contentText}</div>
+                    ${imageHtml}
+                </div>
+            `;
+        } else if (hasImage) {
+            contentHtml = imageHtml;
+        } else {
+            contentHtml = `<div class="content" style="${contentStyle}">${contentText}</div>`;
+        }
+        
+        // Create message HTML
+        messageElement.innerHTML = `
+            <div class="message-header">
+                <div class="message-info">
+                    <div class="timestamp">${timestamp}</div>
+                    <div class="sender" style="color: #ffffff">${message.sender}</div>
+                </div>
+            </div>
+            ${contentHtml}
+        `;
+        
+        // Add deleted class if needed
+        if (isDeleted) {
+            messageElement.classList.add('deleted');
+        }
+        
+        fragment.appendChild(messageElement);
+    });
+    
+    // Add all messages to DOM at once
+    messagesContainer.appendChild(fragment);
+    
+    // Reapply all enhancements
+    const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
+    Promise.all([
+        loadProfileEnhancements(),
+        loadReactionEnhancements()
+    ]).then(() => {
+        scrollToBottom();
+    });
+}
+
+// Debug function to manually check and fix timestamp order (for console debugging)
+window.debugTimestamps = function() {
+    console.log('🔍 Current message order:');
+    messages.forEach((msg, i) => {
+        console.log(`${i}: ${msg.timestamp} - ${msg.sender}: ${msg.content.substring(0, 30)}...`);
+    });
+    
+    const isValid = validateAndFixMessageOrder();
+    console.log(isValid ? '✅ Order is correct' : '🔧 Order was fixed');
+};
+
+// Debug function to force fix timestamps (for console debugging)
+window.fixTimestamps = function() {
+    console.log('🔧 Force fixing timestamp order...');
+    validateAndFixMessageOrder();
+};
+
+// Enhanced debug function to show DOM vs Array order comparison
+window.debugDOMOrder = function() {
+    console.log('🔍 COMPREHENSIVE TIMESTAMP DEBUG:');
+    console.log('=====================================');
+    
+    // Show array order
+    console.log('📊 ARRAY ORDER:');
+    messages.forEach((msg, i) => {
+        const date = new Date(msg.timestamp);
+        console.log(`  ${i}: ${date.toLocaleTimeString()} - ${msg.sender}: ${msg.content.substring(0, 20)}...`);
+    });
+    
+    // Show DOM order
+    console.log('\n🖥️ DOM ORDER:');
+    const domMessages = Array.from(document.querySelectorAll('.message[data-message-id]'));
+    domMessages.forEach((el, i) => {
+        const messageId = el.dataset.messageId;
+        const msg = messages.find(m => m.id === messageId);
+        if (msg) {
+            const date = new Date(msg.timestamp);
+            console.log(`  ${i}: ${date.toLocaleTimeString()} - ${msg.sender}: ${msg.content.substring(0, 20)}...`);
+        }
+    });
+    
+    // Compare arrays
+    console.log('\n⚖️ COMPARISON:');
+    const arrayTimestamps = messages.map(m => new Date(m.timestamp).getTime());
+    const domTimestamps = domMessages.map(el => {
+        const msg = messages.find(m => m.id === el.dataset.messageId);
+        return msg ? new Date(msg.timestamp).getTime() : 0;
+    });
+    
+    const arrayMatches = arrayTimestamps.every((t, i) => t === domTimestamps[i]);
+    console.log(arrayMatches ? '✅ Array and DOM order match!' : '❌ Array and DOM order DO NOT match!');
+    
+    if (!arrayMatches) {
+        console.log('🔧 Triggering automatic fix...');
+        validateAndFixMessageOrder();
+    }
+};
+
+// Emergency rebuild function for console debugging
+window.emergencyRebuild = function() {
+    console.log('🚨 EMERGENCY DOM REBUILD TRIGGERED');
+    rebuildMessagesDOM();
+    console.log('✅ DOM rebuilt from scratch');
+};
+
+// Force update all visible timestamps with new relative date format
+window.refreshAllTimestamps = function() {
+    console.log('🔄 REFRESHING ALL TIMESTAMPS WITH RELATIVE DATES...');
+    
+    const domElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
+    let updated = 0;
+    
+    domElements.forEach((el) => {
+        const messageId = el.dataset.messageId;
+        const msg = messages.find(m => m.id === messageId);
+        
+        if (msg) {
+            const timestampElement = el.querySelector('.timestamp');
+            if (timestampElement) {
+                const oldTimestamp = timestampElement.textContent;
+                const newTimestamp = formatMessageTime(msg.timestamp);
+                
+                timestampElement.textContent = newTimestamp;
+                updated++;
+                
+                if (updated <= 5) { // Show first 5 updates
+                    console.log(`✅ Updated: ${oldTimestamp} → ${newTimestamp}`);
+                }
+            }
+        }
+    });
+    
+    console.log(`🎯 Updated ${updated} timestamps with relative dates!`);
+    return updated;
+};
+
+// Test the new relative date timestamp formatting
+window.testRelativeDates = function() {
+    console.log('📅 RELATIVE DATE TIMESTAMP TEST:');
+    console.log('================================');
+    
+    if (messages.length === 0) {
+        console.log('❌ No messages to test with');
+        return;
+    }
+    
+    // Show first 10 messages with their new relative date formatting
+    console.log('🕐 NEW TIMESTAMP FORMAT (with relative dates):');
+    messages.slice(0, 10).forEach((msg, i) => {
+        const oldFormat = (() => {
+            const date = new Date(msg.timestamp);
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${hours}:${minutes}`;
+        })();
+        
+        const newFormat = formatMessageTime(msg.timestamp);
+        const fullDate = new Date(msg.timestamp).toLocaleString();
+        
+        console.log(`${i}: ${msg.sender}`);
+        console.log(`   🕐 Old: ${oldFormat}`);
+        console.log(`   📅 New: ${newFormat}`);
+        console.log(`   📆 Full: ${fullDate}`);
+        console.log('');
+    });
+    
+    return true;
+};
+
+// Debug function to check if displayed timestamps match database timestamps
+window.debugTimestampDisplay = function() {
+    console.log('🕐 TIMESTAMP DISPLAY DIAGNOSTIC:');
+    console.log('================================');
+    
+    // Check first 15 messages in the DOM 
+    const domElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
+    
+    console.log('📊 DATABASE vs DISPLAYED TIMESTAMPS (with relative dates):');
+    domElements.slice(0, 15).forEach((el, i) => {
+        const messageId = el.dataset.messageId;
+        const msg = messages.find(m => m.id === messageId);
+        
+        if (msg) {
+            // Get raw database timestamp
+            const dbTimestamp = msg.timestamp;
+            const dbDate = new Date(dbTimestamp);
+            const dbFormatted = dbDate.toLocaleString();
+            
+            // Get displayed timestamp from DOM
+            const displayedElement = el.querySelector('.timestamp');
+            const displayedTime = displayedElement ? displayedElement.textContent : 'NO DISPLAY';
+            
+            // Check if they match
+            const formattedTime = formatMessageTime(dbTimestamp);
+            const matches = displayedTime === formattedTime;
+            
+            console.log(`${matches ? '✅' : '❌'} Position ${i}:`);
+            console.log(`  📅 Database: ${dbTimestamp}`);
+            console.log(`  📆 Full Date: ${dbFormatted}`);
+            console.log(`  🖥️ Displayed: ${displayedTime}`);
+            console.log(`  🔧 Expected: ${formattedTime}`);
+            console.log(`  👤 Sender: ${msg.sender}`);
+            console.log('  ');
+        }
+    });
+    
+    // Summary
+    let mismatches = 0;
+    domElements.slice(0, 15).forEach((el, i) => {
+        const messageId = el.dataset.messageId;
+        const msg = messages.find(m => m.id === messageId);
+        if (msg) {
+            const displayedElement = el.querySelector('.timestamp');
+            const displayedTime = displayedElement ? displayedElement.textContent : 'NO DISPLAY';
+            const formattedTime = formatMessageTime(msg.timestamp);
+            if (displayedTime !== formattedTime) mismatches++;
+        }
+    });
+    
+    console.log(`🎯 RESULT: ${mismatches === 0 ? '✅ ALL TIMESTAMPS DISPLAY CORRECTLY' : `❌ ${mismatches} TIMESTAMP DISPLAY ISSUES FOUND`}`);
+    
+    // Show date range of messages
+    if (messages.length > 0) {
+        console.log('\n📊 MESSAGE DATE RANGE:');
+        const firstMsg = messages[0];
+        const lastMsg = messages[messages.length - 1];
+        console.log(`📅 Oldest: ${new Date(firstMsg.timestamp).toLocaleString()}`);
+        console.log(`📅 Newest: ${new Date(lastMsg.timestamp).toLocaleString()}`);
+        console.log(`🕐 Current: ${new Date().toLocaleString()}`);
+    }
+    
+    return mismatches === 0;
+};
+
+// Quick test to show current message order issues
+window.showMessageOrder = function() {
+    console.log('📊 CURRENT MESSAGE ORDER ANALYSIS:');
+    console.log('=================================');
+    
+    // Show array order
+    console.log('🗂️ ARRAY ORDER (what should be displayed):');
+    messages.forEach((msg, i) => {
+        const time = new Date(msg.timestamp).toLocaleTimeString();
+        console.log(`  ${i}: ${time} - ${msg.sender}: ${msg.content.substring(0, 25)}...`);
+    });
+    
+    // Show DOM order
+    console.log('\n🖥️ DOM ORDER (what is actually displayed):');
+    const domElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
+    domElements.forEach((el, i) => {
+        const msg = messages.find(m => m.id === el.dataset.messageId);
+        if (msg) {
+            const time = new Date(msg.timestamp).toLocaleTimeString();
+            console.log(`  ${i}: ${time} - ${msg.sender}: ${msg.content.substring(0, 25)}...`);
+        }
+    });
+    
+    // Check if they match
+    let matches = true;
+    for (let i = 0; i < Math.min(messages.length, domElements.length); i++) {
+        if (messages[i] && domElements[i] && messages[i].id !== domElements[i].dataset.messageId) {
+            matches = false;
+            break;
+        }
+    }
+    
+    console.log(`\n🎯 RESULT: ${matches ? '✅ ARRAY AND DOM MATCH' : '❌ ARRAY AND DOM DO NOT MATCH'}`);
+    return matches;
+};
+
+// Quick test function to verify timestamp order fix
+window.testTimestampOrder = function() {
+    console.log('🧪 TESTING TIMESTAMP ORDER FIX:');
+    console.log('==============================');
+    
+    if (messages.length === 0) {
+        console.log('❌ No messages to test with');
+        return;
+    }
+    
+    // Check array order
+    let arrayOrderCorrect = true;
+    for (let i = 0; i < messages.length - 1; i++) {
+        const currentTime = new Date(messages[i].timestamp).getTime();
+        const nextTime = new Date(messages[i + 1].timestamp).getTime();
+        if (currentTime > nextTime) {
+            arrayOrderCorrect = false;
+            break;
+        }
+    }
+    
+    // Check DOM order
+    const domMessages = Array.from(document.querySelectorAll('.message[data-message-id]'));
+    let domOrderCorrect = true;
+    for (let i = 0; i < domMessages.length - 1; i++) {
+        const currentMsg = messages.find(m => m.id === domMessages[i].dataset.messageId);
+        const nextMsg = messages.find(m => m.id === domMessages[i + 1].dataset.messageId);
+        if (currentMsg && nextMsg) {
+            const currentTime = new Date(currentMsg.timestamp).getTime();
+            const nextTime = new Date(nextMsg.timestamp).getTime();
+            if (currentTime > nextTime) {
+                domOrderCorrect = false;
+                break;
+            }
+        }
+    }
+    
+    console.log(`📊 Array order: ${arrayOrderCorrect ? '✅ CORRECT' : '❌ BROKEN'}`);
+    console.log(`🖥️ DOM order: ${domOrderCorrect ? '✅ CORRECT' : '❌ BROKEN'}`);
+    console.log(`🎯 Overall: ${(arrayOrderCorrect && domOrderCorrect) ? '✅ TIMESTAMP ORDER FIXED!' : '❌ Still has issues'}`);
+    
+    if (!arrayOrderCorrect || !domOrderCorrect) {
+        console.log('🔧 Running automatic fix...');
+        validateAndFixMessageOrder();
+    }
+};
+
+// Make debugging functions available globally
+window.refreshAllTimestamps = window.refreshAllTimestamps;
+window.testRelativeDates = window.testRelativeDates;
+window.debugTimestampDisplay = window.debugTimestampDisplay;
+window.showMessageOrder = window.showMessageOrder;
+window.debugDOMOrder = window.debugDOMOrder;
+window.emergencyRebuild = window.emergencyRebuild;
+window.testTimestampOrder = window.testTimestampOrder;
 
 function scrollToBottom() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
@@ -2060,3 +2775,38 @@ window.testScrollNavigation = testScrollNavigation;
 
 // Initialize the app when the DOM is loaded
 document.addEventListener('DOMContentLoaded', initApp);
+
+// Insert message element at correct DOM position to match array position (CRITICAL FOR TIMESTAMP ORDERING)
+function insertMessageElementAtCorrectPosition(messageElement, arrayIndex) {
+    const existingMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+    
+    // Handle Load More button offset
+    const loadMoreButton = document.getElementById('load-more-messages');
+    
+    console.log(`🔧 DOM INSERT: array index ${arrayIndex}, existing DOM messages: ${existingMessages.length}`);
+    
+    if (arrayIndex === 0) {
+        // Insert at the very beginning (after Load More button if it exists)
+        if (loadMoreButton) {
+            messagesContainer.insertBefore(messageElement, loadMoreButton.nextSibling);
+        } else {
+            messagesContainer.insertBefore(messageElement, messagesContainer.firstChild);
+        }
+        console.log(`🔧 → Inserted at beginning`);
+    } else if (arrayIndex >= existingMessages.length) {
+        // Append to end
+        messagesContainer.appendChild(messageElement);
+        console.log(`🔧 → Appended to end`);
+    } else {
+        // Insert before the message at the current array index
+        // Since DOM messages should match array order, DOM index = array index
+        const insertBeforeElement = existingMessages[arrayIndex];
+        if (insertBeforeElement) {
+            messagesContainer.insertBefore(messageElement, insertBeforeElement);
+            console.log(`🔧 → Inserted at position ${arrayIndex}`);
+        } else {
+            messagesContainer.appendChild(messageElement);
+            console.log(`🔧 → Fallback: appended to end`);
+        }
+    }
+}

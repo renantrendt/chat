@@ -1210,15 +1210,17 @@ body {
     position: relative;
     font-weight: bold;
     text-shadow: 0 0 5px currentColor;
+    padding-left: 20px; /* Add space for crown */
 }
 
 .sender.vip-user::before {
     content: '👑';
     position: absolute;
-    top: -18px;
-    left: 60%;
-    transform: translateX(-50%);
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
     font-size: 14px;
+    line-height: 1;
 }
 
 /* VIP colors in messages */

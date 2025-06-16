@@ -82,14 +82,11 @@ function removeUserFromPresence(roomCode, username) {
 function updatePresenceSidebar() {
     const list = document.getElementById('user-presence-list');
     if (!list || !presenceRoomCode) {
-        console.log('Sidebar update failed - list element or room code missing', { list: !!list, presenceRoomCode });
         return;
     }
     
     const data = getPresenceData();
     const roomUsers = data[presenceRoomCode] || {};
-    
-    console.log('Updating sidebar for room:', presenceRoomCode, 'Users:', roomUsers);
     
     // Clear current list
     list.innerHTML = '';
@@ -119,8 +116,6 @@ function updatePresenceSidebar() {
         entry.appendChild(statusSpan);
         list.appendChild(entry);
     });
-    
-    console.log('Sidebar updated with', sortedUsers.length, 'users');
 }
 
 // Setup sidebar toggle functionality
@@ -159,7 +154,8 @@ function initRoomPresence(roomCode, username) {
     cleanupRoomPresence();
     
     // Create a unique channel name for this room
-    const channelName = `presence:${roomCode}`;
+    // Use timestamp for unique channel name to prevent subscription conflicts
+    const channelName = `presence-${roomCode}-${Date.now()}`;
     
     // Create presence channel
     presenceChannel = window.supabaseClient.channel(channelName, {
@@ -174,7 +170,6 @@ function initRoomPresence(roomCode, username) {
     presenceChannel
         .on('presence', { event: 'sync' }, () => {
             const state = presenceChannel.presenceState();
-            console.log('Presence sync:', state);
             
             // Update online status for all users based on presence state
             const onlineUsers = Object.keys(state);
@@ -191,7 +186,6 @@ function initRoomPresence(roomCode, username) {
             });
         })
         .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-            console.log('User joined:', key);
             // Add user as online
             addUserToPresence(roomCode, key, true);
             // Show notification when someone joins
@@ -200,7 +194,6 @@ function initRoomPresence(roomCode, username) {
             }
         })
         .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-            console.log('User left:', key);
             // Set user as offline
             setUserOffline(roomCode, key);
             // Show notification when someone leaves
@@ -211,11 +204,10 @@ function initRoomPresence(roomCode, username) {
         .subscribe(async (status) => {
             if (status === 'SUBSCRIBED') {
                 // Track user presence
-                const presenceTrack = await presenceChannel.track({
+                await presenceChannel.track({
                     user: username,
                     online_at: new Date().toISOString()
                 });
-                console.log('Presence tracking started:', presenceTrack);
             }
         });
     
@@ -232,77 +224,104 @@ function initRoomPresence(roomCode, username) {
     }
 }
 
-// Show notification when a user joins
-async function showUserJoinNotification(username) {
+// Show notification when a user joins (OPTIMIZED - uses cached profile data)
+function showUserJoinNotification(username) {
     const notification = document.getElementById('user-join-notification');
     if (!notification) return;
     
-    // Check if user is VIP
+    // Use cached profile data instead of database call for VIP status
     let isVIP = false;
-    if (window.checkVIPStatus) {
-        isVIP = await window.checkVIPStatus(username);
-    }
-    
-    // Set the notification text based on VIP status
-    if (isVIP) {
-        notification.innerHTML = `👑 Bow to the presence of <strong>${username}</strong>`;
-        notification.classList.add('vip');
+    if (window.getUserProfile) {
+        // Try to get cached profile data (this should be cached from message loading)
+        window.getUserProfile(username).then(profile => {
+            isVIP = profile?.isVIP || false;
+            
+            // Set the notification text based on VIP status
+            if (isVIP) {
+                notification.innerHTML = `👑 Bow to the presence of <strong>${username}</strong>`;
+                notification.classList.add('vip');
+            } else {
+                notification.textContent = `${username} joined the room`;
+                notification.classList.remove('vip');
+            }
+            
+            // Show the notification
+            notification.classList.add('show');
+            
+            // Hide after 8 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+                if (isVIP) {
+                    notification.classList.remove('vip');
+                }
+            }, 8000);
+        }).catch(() => {
+            // Fallback if profile loading fails
+            notification.textContent = `${username} joined the room`;
+            notification.classList.remove('vip');
+            notification.classList.add('show');
+            setTimeout(() => notification.classList.remove('show'), 8000);
+        });
     } else {
+        // Fallback if profile system not available
         notification.textContent = `${username} joined the room`;
         notification.classList.remove('vip');
+        notification.classList.add('show');
+        setTimeout(() => notification.classList.remove('show'), 8000);
     }
-    
-    // Show the notification
-    notification.classList.add('show');
-    
-    // Hide after appropriate time (8 seconds for VIP, 8 for regular)
-    const displayTime = isVIP ? 8000 : 8000;
-    setTimeout(() => {
-        notification.classList.remove('show');
-        if (isVIP) {
-            notification.classList.remove('vip');
-        }
-    }, displayTime);
 }
 
-// Show notification when a user leaves
-async function showUserLeaveNotification(username) {
+// Show notification when a user leaves (OPTIMIZED - uses cached profile data)
+function showUserLeaveNotification(username) {
     const notification = document.getElementById('user-leave-notification');
     if (!notification) return;
     
-    // Check if user is VIP
+    // Use cached profile data instead of database call for VIP status
     let isVIP = false;
-    if (window.checkVIPStatus) {
-        isVIP = await window.checkVIPStatus(username);
-    }
-    
-    // Set the notification text based on VIP status
-    if (isVIP) {
-        notification.innerHTML = `Cry in tears <strong>${username}</strong> has left...`;
-        notification.classList.add('vip');
+    if (window.getUserProfile) {
+        // Try to get cached profile data (this should be cached from message loading)
+        window.getUserProfile(username).then(profile => {
+            isVIP = profile?.isVIP || false;
+            
+            // Set the notification text based on VIP status
+            if (isVIP) {
+                notification.innerHTML = `Cry in tears <strong>${username}</strong> has left...`;
+                notification.classList.add('vip');
+            } else {
+                notification.textContent = `${username} left the room`;
+                notification.classList.remove('vip');
+            }
+            
+            // Show the notification
+            notification.classList.add('show');
+            
+            // Hide after 8 seconds
+            setTimeout(() => {
+                notification.classList.remove('show');
+                if (isVIP) {
+                    notification.classList.remove('vip');
+                }
+            }, 8000);
+        }).catch(() => {
+            // Fallback if profile loading fails
+            notification.textContent = `${username} left the room`;
+            notification.classList.remove('vip');
+            notification.classList.add('show');
+            setTimeout(() => notification.classList.remove('show'), 8000);
+        });
     } else {
+        // Fallback if profile system not available
         notification.textContent = `${username} left the room`;
         notification.classList.remove('vip');
+        notification.classList.add('show');
+        setTimeout(() => notification.classList.remove('show'), 8000);
     }
-    
-    // Show the notification
-    notification.classList.add('show');
-    
-    // Hide after appropriate time (8 seconds for VIP, 8 for regular)
-    const displayTime = isVIP ? 8000 : 8000;
-    setTimeout(() => {
-        notification.classList.remove('show');
-        if (isVIP) {
-            notification.classList.remove('vip');
-        }
-    }, displayTime);
 }
 
 // Clean up presence tracking - now handled by subscription manager
 function cleanupRoomPresence() {
     // Subscriptions and timers are now handled by subscription manager
     // This function is kept for compatibility
-    console.log('Room presence cleanup - handled by subscription manager');
 }
 
 // Handle page unload/close

@@ -29,9 +29,6 @@ function initReactionSystem() {
         console.log('Reaction system: Event listeners set up');
         
         reactionSystemInitialized = true;
-        window.reactionSystemInitialized = true;
-        console.log('✅ Reaction system: Initialization completed successfully');
-        console.log('✅ window.addReactionArrowToMessage is available:', typeof window.addReactionArrowToMessage);
         
     } catch (error) {
         console.error('❌ Reaction system: Error during initialization:', error);
@@ -347,7 +344,7 @@ function showReactionMenu(arrow) {
         // Store reference for cleanup
         arrow.reactionMenu = menu;
         
-        console.log('✅ Reaction menu created and positioned');
+
         
     } catch (error) {
         console.error('❌ Reaction system: Error showing reaction menu:', error);
@@ -411,7 +408,7 @@ function showEmojiSelector(reactBtn) {
             repositionReactionMenu(menu, messageId);
         }, 10);
         
-        console.log('✅ Emoji selector displayed and repositioned successfully');
+
         
     } catch (error) {
         console.error('❌ Reaction system: Error showing emoji selector:', error);
@@ -429,8 +426,6 @@ function openEmojiPicker(messageId) {
     
     currentReactionMessageId = messageId;
     emojiPickerModal.style.display = 'flex';
-    
-    console.log('✅ Emoji picker modal opened');
 }
 
 // Close emoji picker modal
@@ -442,15 +437,12 @@ function closeEmojiPicker() {
     }
     
     currentReactionMessageId = null;
-    console.log('✅ Emoji picker modal closed');
+
 }
 
 // Select emoji from picker
 function selectEmoji(emoji) {
-    console.log('🎯 Emoji selected from full picker:', emoji, 'for message:', currentReactionMessageId);
-    
     if (currentReactionMessageId) {
-        console.log('✅ Adding reaction from full picker');
         addReaction(currentReactionMessageId, emoji);
         closeEmojiPicker();
     } else {
@@ -513,7 +505,7 @@ function repositionReactionMenu(menu, messageId) {
         menu.style.top = `${top}px`;
         menu.style.left = `${left}px`;
         
-        console.log('Menu repositioned to:', { top, left });
+
         
     } catch (error) {
         console.error('Error repositioning reaction menu:', error);
@@ -528,7 +520,6 @@ function hideReactionMenu() {
 
 // Add reaction to message
 async function addReaction(messageId, emoji) {
-    console.log('🎯 addReaction called:', { messageId, emoji, user: window.currentUser });
     
     // Validate all required parameters
     if (!messageId) {
@@ -552,12 +543,6 @@ async function addReaction(messageId, emoji) {
     }
     
     try {
-        console.log('🔍 Checking for existing reaction...', { 
-            messageId, 
-            username: window.currentUser,
-            newEmoji: emoji 
-        });
-        
         // Check if user already has a reaction to this message (ONE REACTION PER USER RULE)
         const { data: existingReactions, error: checkError } = await window.supabaseClient
             .from('reactions')
@@ -570,13 +555,9 @@ async function addReaction(messageId, emoji) {
             throw checkError;
         }
         
-        console.log('🔍 Found existing reactions:', existingReactions);
-        
         if (existingReactions && existingReactions.length > 0) {
             // Replace existing reaction (DELETE + INSERT approach)
             const existingReaction = existingReactions[0];
-            console.log(`🔄 Replacing ${existingReaction.emoji} with ${emoji} for user ${window.currentUser}`);
-            console.log('🗑️ Deleting old reaction with ID:', existingReaction.id);
             
             // First, delete the existing reaction
             const { error: deleteError } = await window.supabaseClient
@@ -588,8 +569,6 @@ async function addReaction(messageId, emoji) {
                 console.error('❌ Error deleting old reaction:', deleteError);
                 throw deleteError;
             }
-            
-            console.log('✅ Old reaction deleted, now inserting new one');
             
             // Then insert the new reaction
             const { data: insertData, error: insertError } = await window.supabaseClient
@@ -606,11 +585,8 @@ async function addReaction(messageId, emoji) {
                 throw insertError;
             }
             
-            console.log(`✅ Successfully replaced reaction with ${emoji} for message ${messageId}`);
-            console.log('📄 New reaction data:', insertData);
         } else {
             // Insert new reaction
-            console.log(`➕ Adding new reaction ${emoji} for user ${window.currentUser}`);
             const { error: insertError } = await window.supabaseClient
                 .from('reactions')
                 .insert([{
@@ -623,11 +599,9 @@ async function addReaction(messageId, emoji) {
                 console.error('❌ Error inserting reaction:', insertError);
                 throw insertError;
             }
-            console.log(`✅ Successfully added reaction ${emoji} to message ${messageId}`);
         }
         
         // Refresh reactions for this message
-        console.log('🔄 Refreshing reactions display...');
         await loadReactionsForMessage(messageId);
         
     } catch (error) {
@@ -669,7 +643,7 @@ async function removeReaction(messageId, emoji) {
         
         if (error) throw error;
         
-        console.log(`Reaction system: Removed reaction ${emoji} from message ${messageId}`);
+
         
         // Refresh reactions for this message
         await loadReactionsForMessage(messageId);
@@ -681,8 +655,6 @@ async function removeReaction(messageId, emoji) {
 
 // Load reactions for a specific message
 async function loadReactionsForMessage(messageId) {
-    console.log('📥 Loading reactions for message:', messageId);
-    
     try {
         const { data: reactions, error } = await window.supabaseClient
             .from('reactions')
@@ -694,8 +666,6 @@ async function loadReactionsForMessage(messageId) {
             throw error;
         }
         
-        console.log('📥 Loaded reactions:', reactions);
-        
         // Update reactions display
         updateReactionsDisplay(messageId, reactions || []);
         
@@ -706,8 +676,6 @@ async function loadReactionsForMessage(messageId) {
 
 // Update reactions display for a message
 function updateReactionsDisplay(messageId, reactions) {
-    console.log('📊 Updating reactions display for message:', messageId, 'reactions:', reactions);
-    
     const message = document.querySelector(`[data-message-id="${messageId}"]`);
     if (!message) {
         console.warn('❌ Message element not found for ID:', messageId);
@@ -720,7 +688,6 @@ function updateReactionsDisplay(messageId, reactions) {
         // Remove reactions container if no reactions
         if (reactionsContainer) {
             reactionsContainer.remove();
-            console.log('🗑️ Removed empty reactions container');
         }
         return;
     }
@@ -730,7 +697,6 @@ function updateReactionsDisplay(messageId, reactions) {
         reactionsContainer = document.createElement('div');
         reactionsContainer.className = 'reactions-container';
         message.appendChild(reactionsContainer);
-        console.log('➕ Created new reactions container');
     }
     
     // Group reactions by emoji
@@ -742,8 +708,6 @@ function updateReactionsDisplay(messageId, reactions) {
         groupedReactions[reaction.emoji].push(reaction);
     });
     
-    console.log('📊 Grouped reactions:', groupedReactions);
-    
     // Generate HTML for reactions
     const reactionsHTML = Object.entries(groupedReactions).map(([emoji, reactionList]) => {
         const count = reactionList.length;
@@ -751,13 +715,10 @@ function updateReactionsDisplay(messageId, reactions) {
         const ownReactionClass = isOwnReaction ? 'own-reaction' : '';
         const displayText = count > 1 ? `${emoji}${count}` : emoji;
         
-        console.log(`💙 Reaction: ${emoji}, count: ${count}, isOwn: ${isOwnReaction}, display: ${displayText}`);
-        
         return `<button class="reaction-count ${ownReactionClass}" data-emoji="${emoji}" title="React with ${emoji}">${displayText}</button>`;
     }).join('');
     
     reactionsContainer.innerHTML = reactionsHTML;
-    console.log('✅ Reactions display updated successfully');
 }
 
 // Load all reactions for messages in current view
@@ -849,9 +810,10 @@ function subscribeToReactions() {
         window.subscriptionManager.cleanup('reactions');
     }
     
-    // Subscribe to reaction changes for current room
+    // Subscribe to reaction changes for current room (use timestamp for unique channel name)
+    const uniqueChannelName = `reactions-${window.currentRoom}-${Date.now()}`;
     const reactionSubscription = window.supabaseClient
-        .channel(`reactions_${window.currentRoom}`)
+        .channel(uniqueChannelName)
         .on('postgres_changes', 
             { 
                 event: '*', 
@@ -884,7 +846,6 @@ let reactionEventTarget = null;
 
 // Cleanup reactions - now handled by subscription manager, just clean UI
 function cleanupReactions() {
-    console.log('Reaction system: Starting cleanup...');
     
     try {
         // Clean up event listeners
@@ -917,8 +878,6 @@ function cleanupReactions() {
         // Reset initialization state
         reactionSystemInitialized = false;
         
-        console.log('Reaction system: Cleanup completed');
-        
     } catch (error) {
         console.error('Reaction system: Error during cleanup:', error);
     }
@@ -929,7 +888,7 @@ function cleanupReactionEventListeners() {
     if (reactionEventHandler && reactionEventTarget) {
         try {
             reactionEventTarget.removeEventListener('click', reactionEventHandler);
-            console.log('Reaction system: Event listener removed');
+
         } catch (error) {
             console.warn('Reaction system: Error removing event listener:', error);
         }
@@ -940,8 +899,6 @@ function cleanupReactionEventListeners() {
 
 // Add reaction arrow and functionality to message
 function addReactionArrowToMessage(messageElement, messageId) {
-    console.log('Adding reaction arrow to message:', messageId);
-    
     // Validate reaction system is ready
     if (!validateReactionSystem()) {
         console.warn('Reaction system not ready, skipping arrow for message:', messageId);
@@ -961,11 +918,9 @@ function addReactionArrowToMessage(messageElement, messageId) {
     const messageHeader = messageElement.querySelector('.message-header');
     if (messageHeader) {
         messageHeader.appendChild(arrow);
-        console.log('Arrow added to message header for message:', messageId);
     } else {
         // Fallback: add to message element directly
         messageElement.appendChild(arrow);
-        console.log('Arrow added directly to message element for message:', messageId);
     }
     
     // Load reactions for this message
