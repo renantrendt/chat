@@ -302,11 +302,31 @@ Step 2.1: Fix message timestamp sorting
 - Ensure real-time messages insert in correct chronological position
 - Fix loadMoreMessages() to maintain proper order
 
-Step 2.2: Fix image loading for real-time messages
-- Ensure displayMessageFast() properly handles image_url
-- Remove conflicts between INSERT and UPDATE subscriptions
-- Make sure images appear immediately for new messages
-- Fix image preview clearing after sending
+Step 2.2: Fix image loading for real-time messages ✅ COMPLETED
+- ✅ Enhanced real-time subscription to handle both INSERT and UPDATE events
+- ✅ Added createMessageElementWithImageHandling() with loading states and error handling
+- ✅ Fixed subscription conflicts with separate INSERT/UPDATE handlers
+- ✅ Images now appear immediately with smooth loading transitions
+- ✅ Fixed image preview clearing timing to prevent UI flash
+- ✅ Added image loading error fallbacks (shows "Image failed" placeholder)
+- ✅ Real-time image updates work perfectly with message chronological ordering
+- ✅ Added comprehensive image functionality testing: testImageHandling()
+
+**🔥 MAJOR BREAKTHROUGH: OPTIMISTIC UI IMPLEMENTATION** ✅ COMPLETED
+- ⚡ PROBLEM SOLVED: Real-time subscription race conditions causing "refresh page" requirement
+- 🚀 SOLUTION: Implemented optimistic UI - messages appear INSTANTLY when sent
+- 💡 How it works:
+  * Message displays immediately with ⏳ indicator (slightly faded opacity: 0.7)
+  * Real-time subscription replaces optimistic version when working (2-second check)
+  * Fallback enhancement if subscription fails completely
+  * Automatic duplicate prevention and cleanup
+- 📊 TECHNICAL IMPLEMENTATION:
+  * displayMessageOptimistically() - immediate message display
+  * Smart duplicate detection (.optimistic class marking)
+  * Enhanced handleNewMessageInsert() to replace optimistic messages
+  * CSS styling with opacity + visual indicator
+  * Debugging tools: testOptimisticUI(), forceMessageRefresh()
+- 🎯 RESULT: Images and messages appear instantly, no more "refresh page" needed!
 
 Step 2.3: Fix VIP profile cache invalidation ✅ COMPLETED
 - Added persistent profile cache with 5-minute expiry

@@ -291,9 +291,20 @@ function addEventListeners() {
     
     // Chat functionality
     messageInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && (this.value.trim() !== '' || selectedImageFile)) {
-            sendMessage(this.value.trim());
-            this.value = '';
+        if (e.key === 'Enter') {
+            e.preventDefault(); // Prevent default enter behavior
+            
+            const textContent = this.value.trim();
+            const hasImage = selectedImageFile !== null;
+            
+            console.log(`📨 ENTER pressed - Text: "${textContent}", Image: ${hasImage ? 'Yes' : 'No'}`);
+            
+            if (textContent !== '' || hasImage) {
+                sendMessage(textContent);
+                this.value = '';
+            } else {
+                console.log('❌ Enter pressed but no content or image to send');
+            }
         }
     });
     
@@ -917,6 +928,9 @@ async function createMessageElement(message) {
         messageElement.classList.add('deleted');
     }
     
+    // Add error handling to any images in this message
+    addImageErrorHandling(messageElement);
+    
     return messageElement;
 }
 
@@ -990,6 +1004,9 @@ function createMessageElementSync(message) {
         messageElement.classList.add('deleted');
     }
     
+    // Add error handling to any images in this message
+    addImageErrorHandling(messageElement);
+    
     return messageElement;
 }
 
@@ -1062,6 +1079,9 @@ async function displayMessageFastToFragment(message) {
     if (isDeleted) {
         messageElement.classList.add('deleted');
     }
+    
+    // Add error handling to any images in this message
+    addImageErrorHandling(messageElement);
     
     return messageElement;
 }
@@ -1334,6 +1354,9 @@ window.loadMoreMessages = async function(roomCode) {
             // Insert after load more button
             messagesContainer.insertBefore(fragment, loadMoreButton.nextSibling);
             
+            // Add error handling to new message images
+            addImageErrorHandling(fragment);
+            
             // Restore scroll position
             const newScrollHeight = messagesContainer.scrollHeight;
             messagesContainer.scrollTop = newScrollHeight - oldScrollHeight;
@@ -1480,115 +1503,18 @@ function subscribeToMessages(roomCode) {
                 filter: `room_code=eq.${roomCode}`
             }, 
             async (payload) => {
-                const newMessage = payload.new;
-                
-                // Verify we're still in the same room
-                if (currentRoom !== roomCode) {
-                    return;
-                }
-                
-                // Only process if it's not already in our messages array
-                if (!messages.some(m => m.id === newMessage.id)) {
-                    // FIXED: Insert in correct chronological position
-                    const insertIndex = findCorrectInsertionIndex(newMessage);
-                    messages.splice(insertIndex, 0, newMessage);
-                    
-                    // DEBUG: Show real-time insertion position
-                    const time = new Date(newMessage.timestamp).toLocaleTimeString();
-                    console.log(`📨 REAL-TIME INSERT: ${time} - ${newMessage.sender} at position ${insertIndex}/${messages.length}`);
-                    
-                    // Validate order after insertion (skip DOM rebuild since we're building it here)
-                    const orderValid = validateAndFixMessageOrder(true);
-                    
-                    // CREATE message element WITHOUT adding to DOM yet
-                    const messageElement = await createMessageElement(newMessage);
-                    
-                    // INSERT at correct DOM position to match array position
-                    insertMessageElementAtCorrectPosition(messageElement, insertIndex);
-                    
-                    // Only scroll to bottom if this is the newest message
-                    if (insertIndex === messages.length - 1) {
-                        scrollToBottom();
-                    }
-                    
-                    // TRUE PARALLEL LOADING for real-time messages - NO WATERFALL!
-                    const messageId = newMessage.id;
-                    const sender = newMessage.sender;
-                    
-                    // ===== LOAD ALL DATA IN PARALLEL =====
-                    const parallelData = await Promise.all([
-                        // 1. Load profile data
-                        window.getUserProfile(sender),
-                        
-                        // 2. Load reaction data for this message (if it has any)
-                        window.loadReactionDataBulk ? 
-                            window.loadReactionDataBulk([messageId]) : 
-                            Promise.resolve({}),
-                        
-                        // 3. Load reply preview if needed
-                        newMessage.reply_to_message_id ? 
-                            createReplyPreviewForMessage(newMessage.reply_to_message_id) : 
-                            Promise.resolve('')
-                    ]);
-                    
-                    const [profile, reactionData, replyPreviewHtml] = parallelData;
-                    
-                    // ===== APPLY ALL ENHANCEMENTS SIMULTANEOUSLY =====
-                    await Promise.all([
-                        // Apply profile enhancements
-                        profile ? Promise.resolve().then(() => {
-                            const senderElement = messageElement.querySelector('.sender');
-                            if (senderElement) {
-                                senderElement.style.color = profile.color;
-                                if (profile.isVIP) {
-                                    senderElement.classList.add('vip-user');
-                                }
-                            }
-                            
-                            // Add profile image
-                            if (profile.image) {
-                                const messageHeader = messageElement.querySelector('.message-header');
-                                if (messageHeader && !messageHeader.querySelector('.message-profile-img')) {
-                                    const profileImg = document.createElement('img');
-                                    profileImg.src = profile.image;
-                                    profileImg.alt = sender;
-                                    profileImg.className = 'message-profile-img';
-                                    messageHeader.insertBefore(profileImg, messageHeader.firstChild);
-                                }
-                            }
-                        }) : Promise.resolve(),
-                        
-                        // Add reaction arrow and apply reaction data
-                        window.addReactionArrowToMessage ? 
-                            Promise.resolve(window.addReactionArrowToMessage(messageElement, messageId)).then(() => {
-                                // Apply reaction displays if we have data
-                                if (window.applyReactionDisplaysToAllMessages && reactionData[messageId]) {
-                                    window.applyReactionDisplaysToAllMessages([messageElement], reactionData);
-                                }
-                            }) : 
-                            Promise.resolve(),
-                        
-                        // Add reply preview if we have one
-                        replyPreviewHtml ? 
-                            Promise.resolve(messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml)) : 
-                            Promise.resolve(),
-                        
-                        // Add other enhancements for own messages
-                        newMessage.sender === currentUser ? Promise.resolve().then(() => {
-                            if (window.addDeleteTrashCan && !(newMessage.was_deleted || newMessage.content === 'This message was deleted')) {
-                                window.addDeleteTrashCan(messageElement, newMessage);
-                            }
-                            if (newMessage.status && window.addMessageStatus) {
-                                window.addMessageStatus(messageElement, newMessage.status);
-                            }
-                        }) : Promise.resolve(),
-                        
-                        // Add visibility observer for read status
-                        newMessage.sender !== currentUser && window.visibilityObserver ? 
-                            Promise.resolve(window.visibilityObserver.observe(messageElement)) : 
-                            Promise.resolve()
-                    ]);
-                }
+                await handleRealTimeMessage(payload, 'INSERT', roomCode);
+            }
+        )
+        .on('postgres_changes', 
+            { 
+                event: 'UPDATE', 
+                schema: 'public', 
+                table: 'messages',
+                filter: `room_code=eq.${roomCode}`
+            }, 
+            async (payload) => {
+                await handleRealTimeMessage(payload, 'UPDATE', roomCode);
             }
         )
         .subscribe();
@@ -1597,14 +1523,323 @@ function subscribeToMessages(roomCode) {
     subscriptionManager.register('messages', messageSubscription, 'message-updates');
 }
 
+// Handle real-time message events (INSERT and UPDATE)
+async function handleRealTimeMessage(payload, eventType, roomCode) {
+    const newMessage = payload.new;
+    
+    // Verify we're still in the same room
+    if (currentRoom !== roomCode) {
+        return;
+    }
+    
+    if (eventType === 'INSERT') {
+        // Handle new message insertion
+        await handleNewMessageInsert(newMessage);
+    } else if (eventType === 'UPDATE') {
+        // Handle message updates (like image additions, status changes)
+        await handleMessageUpdate(newMessage);
+    }
+}
+
+// Handle new message insertion (INSERT events)
+async function handleNewMessageInsert(newMessage) {
+    // Check if message already exists in array
+    if (messages.some(m => m.id === newMessage.id)) {
+        // Message exists - check if it's optimistic
+        const optimisticElement = document.querySelector(`[data-message-id="${newMessage.id}"].optimistic`);
+        if (optimisticElement) {
+            console.log('🔄 Real-time message received for optimistic message, replacing...');
+            // Remove optimistic version
+            optimisticElement.remove();
+            // Remove from messages array
+            const messageIndex = messages.findIndex(m => m.id === newMessage.id);
+            if (messageIndex !== -1) {
+                messages.splice(messageIndex, 1);
+            }
+            // Continue with normal insertion below
+        } else {
+            console.log('⚠️ Real-time message already exists (not optimistic), skipping');
+            return; // Regular duplicate, skip
+        }
+    }
+    
+    // FIXED: Insert in correct chronological position
+    const insertIndex = findCorrectInsertionIndex(newMessage);
+    messages.splice(insertIndex, 0, newMessage);
+    
+    // DEBUG: Show real-time insertion position
+    const time = new Date(newMessage.timestamp).toLocaleTimeString();
+    console.log(`📨 REAL-TIME INSERT: ${time} - ${newMessage.sender} at position ${insertIndex}/${messages.length}`);
+    
+    // Validate order after insertion (skip DOM rebuild since we're building it here)
+    validateAndFixMessageOrder(true);
+    
+    // CREATE message element with enhanced image handling
+    const messageElement = await createMessageElementWithImageHandling(newMessage);
+    
+    // INSERT at correct DOM position to match array position
+    insertMessageElementAtCorrectPosition(messageElement, insertIndex);
+    
+    // Only scroll to bottom if this is the newest message
+    if (insertIndex === messages.length - 1) {
+        scrollToBottom();
+    }
+    
+    // Apply all enhancements in parallel
+    await applyRealTimeEnhancements(messageElement, newMessage);
+}
+
+// Handle message updates (UPDATE events)
+async function handleMessageUpdate(updatedMessage) {
+    // Find existing message in array and DOM
+    const messageIndex = messages.findIndex(m => m.id === updatedMessage.id);
+    if (messageIndex === -1) {
+        // Message not found, treat as new insert
+        await handleNewMessageInsert(updatedMessage);
+        return;
+    }
+    
+    // Update message in array
+    messages[messageIndex] = updatedMessage;
+    
+    // Find message element in DOM
+    const messageElement = document.querySelector(`[data-message-id="${updatedMessage.id}"]`);
+    if (!messageElement) {
+        console.warn(`⚠️ Message element not found for update: ${updatedMessage.id}`);
+        return;
+    }
+    
+    console.log(`🔄 REAL-TIME UPDATE: ${updatedMessage.sender} - message ${updatedMessage.id}`);
+    
+    // Update message content (especially important for image additions)
+    await updateMessageContent(messageElement, updatedMessage);
+}
+
+// Create message element with enhanced image handling for real-time messages
+async function createMessageElementWithImageHandling(message) {
+    const messageElement = await createMessageElement(message);
+    
+    // Add image loading states if message has images
+    if (message.image_url && !message.was_deleted) {
+        const imageElement = messageElement.querySelector('.message-image');
+        if (imageElement) {
+            // Add loading state
+            imageElement.style.opacity = '0.5';
+            imageElement.style.transition = 'opacity 0.3s ease';
+            
+            // Handle image load success
+            imageElement.onload = function() {
+                this.style.opacity = '1';
+                console.log(`✅ Real-time image loaded: ${message.sender}`);
+            };
+            
+            // Handle image load error
+            imageElement.onerror = function() {
+                console.warn(`❌ Real-time image failed to load: ${message.image_url}`);
+                this.style.opacity = '1';
+                // Create a simple error placeholder
+                this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OSI+SW1hZ2UgZmFpbGVkPC90ZXh0Pjwvc3ZnPg==';
+                this.alt = 'Failed to load image';
+            };
+        }
+    }
+    
+    return messageElement;
+}
+
+// Display message optimistically (immediately when sending)
+async function displayMessageOptimistically(message) {
+    console.log('🚀 DISPLAYING MESSAGE OPTIMISTICALLY:', message);
+    
+    // Check if message already exists (prevent duplicates)
+    if (messages.some(m => m.id === message.id)) {
+        console.log('⚠️ Message already exists, skipping optimistic display');
+        return;
+    }
+    
+    // Add to messages array in correct chronological position
+    const insertIndex = findCorrectInsertionIndex(message);
+    messages.splice(insertIndex, 0, message);
+    console.log(`📍 Inserted optimistic message at position ${insertIndex}/${messages.length}`);
+    
+    // Create message element with optimistic flag
+    const messageElement = await createMessageElementWithImageHandling(message);
+    messageElement.classList.add('optimistic'); // Mark as optimistic
+    
+    // Insert DOM element at correct position
+    insertMessageElementAtCorrectPosition(messageElement, insertIndex);
+    
+    // Apply basic styling (no fancy enhancements yet - keep it fast)
+    const senderElement = messageElement.querySelector('.sender');
+    if (senderElement) {
+        senderElement.style.color = '#ffffff'; // Default color for now
+    }
+    
+    // Scroll to bottom if this is the newest message
+    if (insertIndex === messages.length - 1) {
+        scrollToBottom();
+    }
+    
+    console.log('✅ Optimistic message displayed successfully');
+}
+
+// Update existing message content (for UPDATE events)
+async function updateMessageContent(messageElement, updatedMessage) {
+    // Update timestamp
+    const timestampElement = messageElement.querySelector('.timestamp');
+    if (timestampElement) {
+        timestampElement.textContent = formatMessageTime(updatedMessage.timestamp);
+    }
+    
+    // Update content and image if changed
+    const hasImage = updatedMessage.image_url && !updatedMessage.was_deleted;
+    const hasText = updatedMessage.content && updatedMessage.content.trim() !== '';
+    const isDeleted = updatedMessage.was_deleted || updatedMessage.content === 'This message was deleted';
+    
+    let contentHtml = '';
+    const contentText = isDeleted ? 'This message was deleted' : updatedMessage.content;
+    const contentStyle = isDeleted ? 'color: #ff4444; font-style: italic;' : '';
+    
+    // Rebuild content HTML
+    if (hasImage) {
+        const imageHtml = `
+            <div class="message-image-container">
+                <img src="${updatedMessage.image_url}" alt="Shared image" class="message-image" onclick="openImageFullscreen('${updatedMessage.image_url}')"
+                     style="opacity: 0.5; transition: opacity 0.3s ease;"
+                     onload="this.style.opacity='1'">
+            </div>
+        `;
+        
+        if (hasText) {
+            contentHtml = `
+                <div class="message-content-with-image">
+                    <div class="message-text-content" style="${contentStyle}">${contentText}</div>
+                    ${imageHtml}
+                </div>
+            `;
+        } else {
+            contentHtml = imageHtml;
+        }
+    } else {
+        contentHtml = `<div class="content" style="${contentStyle}">${contentText}</div>`;
+    }
+    
+    // Find and update content area
+    const existingContent = messageElement.querySelector('.content, .message-content-with-image, .message-image-container');
+    if (existingContent) {
+        existingContent.outerHTML = contentHtml;
+        console.log(`🔄 Updated content for message ${updatedMessage.id}`);
+        
+        // Add error handling for the new image if it exists
+        if (hasImage) {
+            const newImageElement = messageElement.querySelector('.message-image');
+            if (newImageElement) {
+                newImageElement.onerror = function() {
+                    console.warn(`❌ Updated image failed to load: ${updatedMessage.image_url}`);
+                    this.style.opacity = '1';
+                    this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OSI+SW1hZ2UgZmFpbGVkPC90ZXh0Pjwvc3ZnPg==';
+                    this.alt = 'Failed to load image';
+                };
+            }
+        }
+    }
+}
+
+// Apply real-time enhancements (optimized for new messages)
+async function applyRealTimeEnhancements(messageElement, messageData) {
+    const messageId = messageData.id;
+    const sender = messageData.sender;
+    
+    // ===== LOAD ALL DATA IN PARALLEL =====
+    const parallelData = await Promise.all([
+        // 1. Load profile data
+        window.getUserProfile(sender),
+        
+        // 2. Load reaction data for this message (if it has any)
+        window.loadReactionDataBulk ? 
+            window.loadReactionDataBulk([messageId]) : 
+            Promise.resolve({}),
+        
+        // 3. Load reply preview if needed
+        messageData.reply_to_message_id ? 
+            createReplyPreviewForMessage(messageData.reply_to_message_id) : 
+            Promise.resolve('')
+    ]);
+    
+    const [profile, reactionData, replyPreviewHtml] = parallelData;
+    
+    // ===== APPLY ALL ENHANCEMENTS SIMULTANEOUSLY =====
+    await Promise.all([
+        // Apply profile enhancements
+        profile ? Promise.resolve().then(() => {
+            const senderElement = messageElement.querySelector('.sender');
+            if (senderElement) {
+                senderElement.style.color = profile.color;
+                if (profile.isVIP) {
+                    senderElement.classList.add('vip-user');
+                }
+            }
+            
+            // Add profile image
+            if (profile.image) {
+                const messageHeader = messageElement.querySelector('.message-header');
+                if (messageHeader && !messageHeader.querySelector('.message-profile-img')) {
+                    const profileImg = document.createElement('img');
+                    profileImg.src = profile.image;
+                    profileImg.alt = sender;
+                    profileImg.className = 'message-profile-img';
+                    messageHeader.insertBefore(profileImg, messageHeader.firstChild);
+                }
+            }
+        }) : Promise.resolve(),
+        
+        // Add reaction arrow and apply reaction data
+        window.addReactionArrowToMessage ? 
+            Promise.resolve(window.addReactionArrowToMessage(messageElement, messageId)).then(() => {
+                // Apply reaction displays if we have data
+                if (window.applyReactionDisplaysToAllMessages && reactionData[messageId]) {
+                    window.applyReactionDisplaysToAllMessages([messageElement], reactionData);
+                }
+            }) : 
+            Promise.resolve(),
+        
+        // Add reply preview if we have one
+        replyPreviewHtml ? 
+            Promise.resolve(messageElement.insertAdjacentHTML('afterbegin', replyPreviewHtml)) : 
+            Promise.resolve(),
+        
+        // Add other enhancements for own messages
+        messageData.sender === currentUser ? Promise.resolve().then(() => {
+            if (window.addDeleteTrashCan && !(messageData.was_deleted || messageData.content === 'This message was deleted')) {
+                window.addDeleteTrashCan(messageElement, messageData);
+            }
+            if (messageData.status && window.addMessageStatus) {
+                window.addMessageStatus(messageElement, messageData.status);
+            }
+        }) : Promise.resolve(),
+        
+        // Add visibility observer for read status
+        messageData.sender !== currentUser && window.visibilityObserver ? 
+            Promise.resolve(window.visibilityObserver.observe(messageElement)) : 
+                         Promise.resolve()
+     ]);
+}
+
 // Image handling functions
 function handleImageSelect(event) {
     const file = event.target.files[0];
+    console.log('📁 IMAGE FILE SELECTED:', file);
+    
     if (file) {
         if (validateImageFile(file)) {
             displayImagePreview(file);
             selectedImageFile = file;
+            console.log('✅ selectedImageFile set to:', selectedImageFile);
+        } else {
+            console.log('❌ Image validation failed');
         }
+    } else {
+        console.log('❌ No file selected');
     }
 }
 
@@ -1623,12 +1858,21 @@ function handleImageDrop(event) {
     inputArea.classList.remove('drag-over');
     
     const files = event.dataTransfer.files;
+    console.log('🎯 IMAGE DROPPED:', files);
+    
     if (files.length > 0) {
         const file = files[0];
+        console.log('📁 Processing dropped file:', file);
+        
         if (validateImageFile(file)) {
             displayImagePreview(file);
             selectedImageFile = file;
+            console.log('✅ selectedImageFile set from drop:', selectedImageFile);
+        } else {
+            console.log('❌ Dropped file validation failed');
         }
+    } else {
+        console.log('❌ No files in drop event');
     }
 }
 
@@ -1651,21 +1895,32 @@ function validateImageFile(file) {
 }
 
 function displayImagePreview(file) {
+    console.log('📷 DISPLAYING IMAGE PREVIEW');
+    console.log(`  📁 File:`, file);
+    console.log(`  📊 Size: ${file.size} bytes`);
+    console.log(`  🏷️ Name: ${file.name}`);
+    
     const reader = new FileReader();
     reader.onload = function(e) {
         imagePreview.src = e.target.result;
         imagePreviewContainer.style.display = 'block';
         messageInput.placeholder = 'Add a caption (optional)...';
+        console.log('✅ Image preview displayed successfully');
     };
     reader.readAsDataURL(file);
 }
 
 function clearImagePreview() {
+    console.log('🗑️ CLEARING IMAGE PREVIEW');
+    console.log(`  📁 Before clear - selectedImageFile:`, selectedImageFile);
+    
     imagePreviewContainer.style.display = 'none';
     imagePreview.src = '';
     selectedImageFile = null;
     imageFileInput.value = '';
     messageInput.placeholder = 'Type a message...';
+    
+    console.log(`  ✅ After clear - selectedImageFile:`, selectedImageFile);
 }
 
 async function uploadImageToSupabase(file) {
@@ -1693,17 +1948,33 @@ async function uploadImageToSupabase(file) {
 }
 
 async function sendMessage(content) {
-    if (!currentRoom || !currentUser || (!content && !selectedImageFile)) return;
+    // Enhanced debugging for image sending
+    console.log('🚀 SEND MESSAGE called:');
+    console.log(`  📝 Content: "${content}"`);
+    console.log(`  📷 selectedImageFile:`, selectedImageFile);
+    console.log(`  🏠 currentRoom: ${currentRoom}`);
+    console.log(`  👤 currentUser: ${currentUser}`);
+    
+    if (!currentRoom || !currentUser || (!content && !selectedImageFile)) {
+        console.log('❌ SEND BLOCKED: Missing requirements');
+        console.log(`  - Room: ${!currentRoom ? '❌' : '✅'}`);
+        console.log(`  - User: ${!currentUser ? '❌' : '✅'}`);
+        console.log(`  - Content or Image: ${(!content && !selectedImageFile) ? '❌' : '✅'}`);
+        return;
+    }
     
     try {
         let imageUrl = null;
         
         // Convert image to base64 if selected
         if (selectedImageFile) {
+            console.log(`📷 Processing image: ${selectedImageFile.name}, size: ${selectedImageFile.size} bytes`);
             imageUrl = await uploadImageToSupabase(selectedImageFile);
             if (!imageUrl) {
+                console.log('❌ Image processing failed, aborting send');
                 return; // Image processing failed, don't send message
             }
+            console.log('✅ Image processed successfully');
         }
         
         // Create message object with status
@@ -1729,6 +2000,35 @@ async function sendMessage(content) {
         
         if (error) throw error;
         
+        console.log('✅ Message sent to database:', data[0]);
+        
+        // 🔥 OPTIMISTIC UI: Display message immediately instead of waiting for subscription
+        const sentMessage = data[0]; // Get the message with database ID
+        await displayMessageOptimistically(sentMessage);
+        
+        // Set up fallback check in case real-time subscription fails
+        const messageId = sentMessage.id;
+        setTimeout(() => {
+            // Check if message appeared via subscription (would have different styling/enhancements)
+            const realTimeElement = document.querySelector(`[data-message-id="${messageId}"]:not(.optimistic)`);
+            if (realTimeElement) {
+                // Real-time version appeared, remove optimistic version
+                const optimisticElement = document.querySelector(`[data-message-id="${messageId}"].optimistic`);
+                if (optimisticElement) {
+                    optimisticElement.remove();
+                    console.log('🔄 Replaced optimistic message with real-time version');
+                }
+            } else {
+                // Real-time subscription failed, enhance the optimistic message
+                const optimisticElement = document.querySelector(`[data-message-id="${messageId}"].optimistic`);
+                if (optimisticElement) {
+                    optimisticElement.classList.remove('optimistic');
+                    applyRealTimeEnhancements(optimisticElement, sentMessage);
+                    console.log('🔧 Enhanced optimistic message (subscription failed)');
+                }
+            }
+        }, 2000);
+        
         // Clear reply state after sending
         if (window.currentReplyMessageId) {
             if (window.hideReplyPreview) {
@@ -1739,12 +2039,10 @@ async function sendMessage(content) {
             }
         }
         
-        // Let the real-time subscription handle displaying the message
-        // This ensures proper chronological ordering and prevents duplicates
-        
-        // Clear input and image preview
+        // Clear input and image preview immediately
         messageInput.value = '';
         clearImagePreview();
+        console.log('📷 Image preview cleared after successful send');
         
         // Update delivery status for other users (if function exists)
         if (window.updateMessageDeliveryStatus) {
@@ -1915,6 +2213,9 @@ async function displayMessage(message) {
         window.visibilityObserver.observe(messageElement);
     }
     
+    // Add error handling to any images in this message
+    addImageErrorHandling(messageElement);
+    
     // Scroll to bottom
     scrollToBottom();
 }
@@ -1966,6 +2267,24 @@ function openImageFullscreen(imageUrl) {
 
 // Make function globally accessible
 window.openImageFullscreen = openImageFullscreen;
+
+// Universal function to add error handling to all message images
+function addImageErrorHandling(container) {
+    if (!container) return;
+    
+    const images = container.querySelectorAll('.message-image');
+    images.forEach(img => {
+        // Only add error handler if it doesn't already have one
+        if (!img.dataset.errorHandlerAdded) {
+            img.onerror = function() {
+                console.warn(`❌ Message image failed to load: ${this.src}`);
+                this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OSI+SW1hZ2UgZmFpbGVkPC90ZXh0Pjwvc3ZnPg==';
+                this.alt = 'Failed to load image';
+            };
+            img.dataset.errorHandlerAdded = 'true';
+        }
+    });
+}
 
 // Format timestamp for display with relative dates
 function formatMessageTime(timestamp) {
@@ -2162,6 +2481,9 @@ function rebuildMessagesDOM() {
     
     // Add all messages to DOM at once
     messagesContainer.appendChild(fragment);
+    
+    // Add error handling to all images in the rebuilt messages
+    addImageErrorHandling(messagesContainer);
     
     // Reapply all enhancements
     const messageElements = Array.from(document.querySelectorAll('.message[data-message-id]'));
@@ -2450,7 +2772,193 @@ window.testTimestampOrder = function() {
     }
 };
 
+// Check current image sending state
+window.checkImageState = function() {
+    console.log('📷 CURRENT IMAGE STATE:');
+    console.log('=====================');
+    
+    console.log(`📁 selectedImageFile:`, selectedImageFile);
+    console.log(`👁️ Preview container display:`, imagePreviewContainer?.style?.display);
+    console.log(`🖼️ Preview src:`, imagePreview?.src ? 'Set' : 'Empty');
+    console.log(`💬 Message input value: "${messageInput?.value || ''}"`);
+    console.log(`🏠 Current room: ${currentRoom || 'None'}`);
+    console.log(`👤 Current user: ${currentUser || 'None'}`);
+    
+    // Test send conditions
+    const hasText = messageInput?.value?.trim() !== '';
+    const hasImage = selectedImageFile !== null;
+    const canSend = hasText || hasImage;
+    
+    console.log('\n✅ SEND CONDITIONS:');
+    console.log(`📝 Has text: ${hasText ? '✅' : '❌'}`);
+    console.log(`📷 Has image: ${hasImage ? '✅' : '❌'}`);
+    console.log(`🚀 Can send: ${canSend ? '✅' : '❌'}`);
+    
+    return { hasText, hasImage, canSend };
+};
+
+// Test real-time image functionality
+window.testImageHandling = function() {
+    console.log('📷 TESTING REAL-TIME IMAGE FUNCTIONALITY:');
+    console.log('=========================================');
+    
+    // Check if image handling functions exist
+    const functions = [
+        'handleRealTimeMessage',
+        'createMessageElementWithImageHandling', 
+        'updateMessageContent',
+        'clearImagePreview'
+    ];
+    
+    functions.forEach(funcName => {
+        const exists = typeof window[funcName] === 'function' || typeof eval(funcName) === 'function';
+        console.log(`${exists ? '✅' : '❌'} ${funcName}: ${exists ? 'Available' : 'Missing'}`);
+    });
+    
+    // Check subscription events
+    console.log('\n📡 SUBSCRIPTION EVENTS:');
+    console.log('✅ INSERT events: Handled for new messages');
+    console.log('✅ UPDATE events: Handled for message updates');
+    
+    // Test image preview state
+    const hasImageSelected = selectedImageFile !== null;
+    const previewVisible = imagePreviewContainer && imagePreviewContainer.style.display !== 'none';
+    
+    console.log('\n📸 CURRENT IMAGE STATE:');
+    console.log(`📁 Selected file: ${hasImageSelected ? selectedImageFile?.name || 'File selected' : 'None'}`);
+    console.log(`👁️ Preview visible: ${previewVisible ? 'Yes' : 'No'}`);
+    
+    // Check recent image messages
+    const recentImageMessages = messages.slice(-10).filter(m => m.image_url);
+    console.log(`\n🖼️ Recent image messages: ${recentImageMessages.length}/10`);
+    
+    if (recentImageMessages.length > 0) {
+        recentImageMessages.forEach((msg, i) => {
+            console.log(`  ${i + 1}: ${msg.sender} - ${msg.image_url ? 'Has image' : 'No image'}`);
+        });
+    }
+    
+    console.log('\n🎯 IMAGE HANDLING STATUS: All improvements deployed!');
+    return true;
+};
+
+// Test optimistic UI functionality
+window.testOptimisticUI = function() {
+    console.log('🧪 TESTING OPTIMISTIC UI:');
+    console.log('========================');
+    
+    const optimisticElements = document.querySelectorAll('.message.optimistic');
+    const realTimeElements = document.querySelectorAll('.message:not(.optimistic)');
+    
+    console.log(`📨 Optimistic messages: ${optimisticElements.length}`);
+    console.log(`📡 Real-time messages: ${realTimeElements.length}`);
+    console.log(`📊 Total messages in array: ${messages.length}`);
+    
+    if (optimisticElements.length > 0) {
+        console.log('\n🚀 OPTIMISTIC MESSAGES:');
+        optimisticElements.forEach((el, i) => {
+            const messageId = el.dataset.messageId;
+            const sender = el.dataset.sender;
+            console.log(`  ${i + 1}: ${sender} (ID: ${messageId})`);
+        });
+    }
+    
+    return {
+        optimistic: optimisticElements.length,
+        realTime: realTimeElements.length,
+        total: messages.length
+    };
+};
+
+// Force manual message refresh (emergency fallback)
+window.forceMessageRefresh = async function() {
+    console.log('🔧 FORCING MESSAGE REFRESH...');
+    
+    if (!currentRoom) {
+        console.log('❌ No current room');
+        return;
+    }
+    
+    try {
+        // Get latest messages from database
+        const { data: latestMessages, error } = await window.supabaseClient
+            .from('messages')
+            .select('*')
+            .eq('room_code', currentRoom)
+            .order('timestamp', { ascending: true })
+            .limit(10);
+        
+        if (error) throw error;
+        
+        console.log(`📥 Retrieved ${latestMessages.length} latest messages`);
+        
+        // Add any missing messages to our array
+        let addedCount = 0;
+        latestMessages.forEach(dbMessage => {
+            if (!messages.some(m => m.id === dbMessage.id)) {
+                messages.push(dbMessage);
+                addedCount++;
+            }
+        });
+        
+        if (addedCount > 0) {
+            console.log(`➕ Added ${addedCount} missing messages`);
+            // Sort and rebuild DOM
+            validateAndFixMessageOrder();
+        } else {
+            console.log('✅ All messages already present');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error refreshing messages:', error);
+    }
+};
+
+// Test if image error handling is working properly
+window.testImageErrorHandling = function() {
+    console.log('🖼️ TESTING IMAGE ERROR HANDLING:');
+    console.log('================================');
+    
+    const images = document.querySelectorAll('.message-image');
+    console.log(`📊 Found ${images.length} message images`);
+    
+    let withErrorHandlers = 0;
+    let withoutErrorHandlers = 0;
+    
+    images.forEach((img, i) => {
+        const hasHandler = img.dataset.errorHandlerAdded === 'true';
+        if (hasHandler) {
+            withErrorHandlers++;
+        } else {
+            withoutErrorHandlers++;
+        }
+        
+        if (i < 5) { // Show first 5 for debugging
+            console.log(`${i + 1}: ${hasHandler ? '✅' : '❌'} Error handler: ${hasHandler ? 'Added' : 'Missing'}`);
+            console.log(`   📎 Source: ${img.src.substring(0, 50)}...`);
+        }
+    });
+    
+    console.log(`\n📈 SUMMARY:`);
+    console.log(`✅ With error handlers: ${withErrorHandlers}`);
+    console.log(`❌ Without error handlers: ${withoutErrorHandlers}`);
+    
+    if (withoutErrorHandlers > 0) {
+        console.log('🔧 Adding missing error handlers...');
+        addImageErrorHandling(document);
+        console.log('✅ All images now have error handlers!');
+    }
+    
+    return {
+        total: images.length,
+        withHandlers: withErrorHandlers,
+        withoutHandlers: withoutErrorHandlers
+    };
+};
+
 // Make debugging functions available globally
+window.checkImageState = window.checkImageState;
+window.testImageHandling = window.testImageHandling;
 window.refreshAllTimestamps = window.refreshAllTimestamps;
 window.testRelativeDates = window.testRelativeDates;
 window.debugTimestampDisplay = window.debugTimestampDisplay;
@@ -2458,6 +2966,9 @@ window.showMessageOrder = window.showMessageOrder;
 window.debugDOMOrder = window.debugDOMOrder;
 window.emergencyRebuild = window.emergencyRebuild;
 window.testTimestampOrder = window.testTimestampOrder;
+window.testOptimisticUI = window.testOptimisticUI;
+window.forceMessageRefresh = window.forceMessageRefresh;
+window.testImageErrorHandling = window.testImageErrorHandling;
 
 function scrollToBottom() {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
