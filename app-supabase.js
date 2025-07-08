@@ -2232,7 +2232,9 @@ function formatMessageTime(timestamp) {
     const diffMs = now.getTime() - date.getTime();
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const diffWeeks = Math.floor(diffDays / 7);
-    const diffMonths = Math.floor(diffDays / 30);
+    
+    // Calculate months based on weeks (4 weeks = 1 month)
+    const diffMonths = Math.floor(diffWeeks / 4);
     
     // Get relative date string
     let relativeDate = '';
@@ -2249,10 +2251,13 @@ function formatMessageTime(timestamp) {
     } else if (diffWeeks === 1) {
         relativeDate = 'Last week';
     } else if (diffWeeks < 4) {
+        // Show weeks for anything less than 4 weeks
         relativeDate = `${diffWeeks} weeks ago`;
-    } else if (diffMonths === 1) {
-        relativeDate = 'Last month';
+    } else if (diffMonths === 1 || (diffWeeks >= 4 && diffWeeks < 8)) {
+        // 4-7 weeks shows as "1 month ago"
+        relativeDate = '1 month ago';
     } else if (diffMonths < 12) {
+        // 8+ weeks shows as "X months"
         relativeDate = `${diffMonths} months ago`;
     } else {
         // More than a year ago, show actual date
